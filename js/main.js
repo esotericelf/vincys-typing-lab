@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { VirtualKeyboard, FloatingScreen } from './keyboard3d.js';
 import { TypingGame, buildRefSheet } from './game.js';
-import { loadDictionary, SAMPLE_TEXTS, codeMap } from './dictLoader.js';
+import { loadDictionary, SAMPLE_TEXTS, codeMap, dictSource } from './dictLoader.js';
 import { registerServiceWorker, setupInstallPrompt } from './pwa.js';
 import { bgm } from './bgm.js';
 import { themeManager } from './themeManager.js';
@@ -231,10 +231,22 @@ bgm.onTrackChange(({ name, enabled, playing }) => {
   }
 });
 
-bgm.loadPlaylist().then(() => {
-  if (bgm.enabled) bgm.start();
-  else bgm._emitTrack();
-});
+(async () => {
+  try {
+    await bgm.loadPlaylist();
+  } catch (err) {
+    console.warn('[bgm] init failed — muted fallback', err);
+    bgm.tracks = [];
+    bgm.setEnabled(false);
+  } finally {
+    try {
+      if (bgm.enabled && bgm.tracks.length) bgm.start();
+      else bgm._emitTrack();
+    } catch (err) {
+      console.warn('[bgm] start failed', err);
+    }
+  }
+})();
 
 buildRefSheet();
 
@@ -694,24 +706,29 @@ const lookCurrent = camHome.look.clone();
 let t0 = performance.now();
 function animate(now) {
   requestAnimationFrame(animate);
-  const t = now - t0;
+  try {
+    const t = now - t0;
 
-  keyboard.update(now);
-  screen.update(t);
+    keyboard.update(now);
+    screen.update(t);
 
-  cyanPoint.intensity = 2.0 + Math.sin(t * 0.002) * 0.35;
-  magentaPoint.intensity = 1.2 + Math.cos(t * 0.0017) * 0.3;
+    // Pulsing accent lights (renamed from cyanPoint / magentaPoint for themes)
+    if (accentA) accentA.intensity = 2.0 + Math.sin(t * 0.002) * 0.35;
+    if (accentB) accentB.intensity = 1.2 + Math.cos(t * 0.0017) * 0.3;
 
-  const drift = Math.sin(t * 0.00015) * 0.25;
-  camera.position.x += (camTarget.pos.x + drift - camera.position.x) * 0.06;
-  camera.position.y += (camTarget.pos.y - camera.position.y) * 0.06;
-  camera.position.z += (camTarget.pos.z - camera.position.z) * 0.06;
-  lookCurrent.lerp(camTarget.look, 0.06);
-  camera.lookAt(lookCurrent);
-  camera.fov += (camTarget.fov - camera.fov) * 0.06;
-  camera.updateProjectionMatrix();
+    const drift = Math.sin(t * 0.00015) * 0.25;
+    camera.position.x += (camTarget.pos.x + drift - camera.position.x) * 0.06;
+    camera.position.y += (camTarget.pos.y - camera.position.y) * 0.06;
+    camera.position.z += (camTarget.pos.z - camera.position.z) * 0.06;
+    lookCurrent.lerp(camTarget.look, 0.06);
+    camera.lookAt(lookCurrent);
+    camera.fov += (camTarget.fov - camera.fov) * 0.06;
+    camera.updateProjectionMatrix();
 
-  renderer.render(scene, camera);
+    renderer.render(scene, camera);
+  } catch (err) {
+    console.error('[animate] frame error', err);
+  }
 }
 animate(performance.now());
 
@@ -728,18 +745,57 @@ const dictStatus = document.getElementById('dict-status');
 buildSampleList();
 game.setRaceLimit(120);
 
+function setDictStatusReady() {
+  const n = codeMap.size.toLocaleString();
+  const note = dictSource === 'fallback' ? ' · 精簡模式' : '';
+  if (dictStatus) {
+    dictStatus.textContent = `已載入字典 (${n} 字)${note}。選擇模式開始練習。`;
+  }
+}
+
+function enableStartButtons() {
+  dictReady = true;
+  const drill = document.getElementById('btn-start-drill');
+  const race = document.getElementById('btn-start-race');
+  if (drill) drill.disabled = false;
+  if (race) race.disabled = !raceLoaded;
+}
+
+function resolveLoadingScreen() {
+  setDictStatusReady();
+  enableStartButtons();
+}
+
+window.addEventListener('dict-upgraded', () => {
+  setDictStatusReady();
+  try {
+    game.initPool();
+  } catch (err) {
+    console.warn('[boot] pool refresh after upgrade failed', err);
+  }
+});
+
 (async () => {
   try {
+    if (dictStatus) dictStatus.textContent = '正在載入字典…';
     await loadDictionary();
-    await game.initPool();
-    dictReady = true;
-    dictStatus.textContent = `字典已就緒（${codeMap.size.toLocaleString()} 字）。選擇模式開始練習。`;
-    document.getElementById('btn-start-drill').disabled = false;
-    document.getElementById('btn-start-race').disabled = !raceLoaded;
-    // preload first sample for convenience
-    await loadSample(SAMPLE_TEXTS[0]);
+    try {
+      await game.initPool();
+    } catch (poolErr) {
+      console.error('[boot] initPool failed', poolErr);
+    }
   } catch (err) {
-    dictStatus.textContent = '字典載入失敗，請重新整理頁面後再試。';
-    console.error(err);
+    console.error('[boot] dictionary init error', err);
+    if (dictStatus) {
+      dictStatus.textContent = '字典載入異常，已切換至內建字表。';
+    }
+  } finally {
+    // Always unlock UI — never leave the user on "正在載入字典…"
+    resolveLoadingScreen();
+    try {
+      await loadSample(SAMPLE_TEXTS[0]);
+    } catch (sampleErr) {
+      console.warn('[boot] sample preload skipped', sampleErr);
+    }
   }
 })();

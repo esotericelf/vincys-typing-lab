@@ -52,20 +52,38 @@ export class BgmManager {
 
   async loadPlaylist() {
     try {
-      const res = await fetch(PLAYLIST_URL, { cache: 'no-cache' });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = await res.json();
-      const names = Array.isArray(data.tracks) ? data.tracks : [];
-      this.tracks = names
-        .filter((n) => /\.(mp3|wav|ogg|m4a)$/i.test(n))
-        .map((name) => ({
-          name,
-          url: `./src/${encodeURIComponent(name).replace(/%2F/gi, '/')}`,
-        }));
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const timer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : null;
+      try {
+        const res = await fetch(PLAYLIST_URL, {
+          cache: 'no-cache',
+          signal: ctrl?.signal,
+        });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const names = Array.isArray(data.tracks) ? data.tracks : [];
+        this.tracks = names
+          .filter((n) => typeof n === 'string' && /\.(mp3|wav|ogg|m4a)$/i.test(n))
+          .map((name) => ({
+            name,
+            url: `./src/${encodeURIComponent(name).replace(/%2F/gi, '/')}`,
+          }));
+      } finally {
+        if (timer) clearTimeout(timer);
+      }
     } catch (err) {
-      console.warn('[bgm] playlist load failed', err);
+      console.warn('[bgm] playlist load failed — muted fallback', err);
       this.tracks = [];
+      this.enabled = false;
+      this._wantPlay = false;
+      try {
+        this.audio.pause();
+      } catch {
+        /* ignore */
+      }
+      this.audio.volume = 0;
     }
+    this._emitTrack();
     return this.tracks;
   }
 

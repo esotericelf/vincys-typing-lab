@@ -1,5 +1,7 @@
 /* Vincy's typing lab — lightweight offline cache */
-const CACHE_VERSION = 'vincys-typing-lab-v3';
+const CACHE_VERSION = 'vincys-typing-lab-v4';
+
+/** Small assets only — large dict JSON is runtime-cached (avoids install hang). */
 const PRECACHE = [
   './',
   './index.html',
@@ -9,6 +11,7 @@ const PRECACHE = [
   './js/game.js',
   './js/keyboard3d.js',
   './js/dictLoader.js',
+  './js/fallbackDict.js',
   './js/cangjieData.js',
   './js/decompose.js',
   './js/audio.js',
@@ -16,7 +19,7 @@ const PRECACHE = [
   './js/themeManager.js',
   './js/pwa.js',
   './src/playlist.json',
-  './dict/cangjie5.json',
+  './src/assets/cangjie-baseline.json',
   './dict/practice_chars.json',
   './texts/sanzi.txt',
   './texts/news.txt',
@@ -28,11 +31,17 @@ const PRECACHE = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_VERSION).then((cache) =>
-      cache.addAll(PRECACHE).catch((err) => {
-        console.warn('[sw] precache partial fail', err);
-      })
-    ).then(() => self.skipWaiting())
+    (async () => {
+      const cache = await caches.open(CACHE_VERSION);
+      await Promise.allSettled(
+        PRECACHE.map((url) =>
+          cache.add(url).catch((err) => {
+            console.warn('[sw] precache skip', url, err);
+          })
+        )
+      );
+      await self.skipWaiting();
+    })()
   );
 });
 
@@ -50,7 +59,6 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(req.url);
 
-  // Cache-first for same-origin static assets & dictionary
   const sameOrigin = url.origin === self.location.origin;
   const isStatic =
     sameOrigin ||
@@ -60,11 +68,35 @@ self.addEventListener('fetch', (event) => {
 
   if (!isStatic) return;
 
+  // Network-first for large dictionary JSON so updates aren't stuck behind a bad cache
+  const isDictJson =
+    sameOrigin &&
+    (url.pathname.endsWith('/cangjie.json') ||
+      url.pathname.endsWith('/cangjie5.json') ||
+      url.pathname.endsWith('/cangjie-baseline.json'));
+
+  if (isDictJson) {
+    event.respondWith(
+      (async () => {
+        const cache = await caches.open(CACHE_VERSION);
+        try {
+          const res = await fetch(req);
+          if (res && res.ok) cache.put(req, res.clone());
+          return res;
+        } catch (err) {
+          const cached = await cache.match(req);
+          if (cached) return cached;
+          throw err;
+        }
+      })()
+    );
+    return;
+  }
+
   event.respondWith(
     caches.open(CACHE_VERSION).then(async (cache) => {
       const cached = await cache.match(req);
       if (cached) {
-        // Stale-while-revalidate for CDN / dict
         event.waitUntil(
           fetch(req)
             .then((res) => {

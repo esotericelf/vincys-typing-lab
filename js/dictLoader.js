@@ -1,29 +1,42 @@
 /**
  * rime-cangjie (Cangjie 5) dictionary loader & text analytics
  * Source: https://github.com/rime/rime-cangjie
+ *
+ * Load order:
+ *  1) Local static JSON (src/assets + dict/) with 3s timeout
+ *  2) Built-in baseline FALLBACK_DICT (never hang)
+ *  3) Background upgrade to full JSON / CDN YAML when available
  */
 
 import { CANGJIE_RADICALS } from './cangjieData.js';
+import { FALLBACK_DICT } from './fallbackDict.js';
 
-const DICT_URLS = [
+const LOCAL_JSON_URLS = [
+  './src/assets/cangjie.json',
   './dict/cangjie5.json',
-  'https://cdn.jsdelivr.net/gh/rime/rime-cangjie@master/cangjie5.base.dict.yaml',
+  './src/assets/cangjie-baseline.json',
 ];
+
+const CDN_YAML_URL =
+  'https://cdn.jsdelivr.net/gh/rime/rime-cangjie@master/cangjie5.base.dict.yaml';
+
+const LOAD_TIMEOUT_MS = 3000;
 
 /** @type {Map<string, string>} char -> Cangjie code (A-Z) */
 export const codeMap = new Map();
 
-/** @type {Map<string, number>} char -> frequency rank (lower = more common, Windows/Rime style) */
+/** @type {Map<string, number>} char -> frequency rank (lower = more common) */
 export const freqMap = new Map();
 
 /** @type {Map<string, string[]>} quickCode -> chars sorted by frequency */
 export const quickIndex = new Map();
 
-/** Candidates per IME page (number keys 1–9) */
 export const QUICK_PAGE_SIZE = 9;
 
 let loaded = false;
 let loadPromise = null;
+/** @type {'full' | 'fallback' | null} */
+export let dictSource = null;
 
 export function charFreq(ch) {
   return freqMap.has(ch) ? freqMap.get(ch) : 9e8;
@@ -41,16 +54,12 @@ export function rebuildQuickIndex() {
     }
     list.push(ch);
   }
-  // Sort each bucket by Windows/Rime-like frequency (ascending rank)
   for (const [q, list] of quickIndex) {
     list.sort((a, b) => charFreq(a) - charFreq(b) || a.localeCompare(b, 'zh-Hant'));
     quickIndex.set(q, list);
   }
 }
 
-/**
- * Characters that share a 速成 (first+last) code, frequency-sorted like Windows IME.
- */
 export function lookupQuickCandidates(quickCode, { limit = 0 } = {}) {
   const q = (quickCode || '').toUpperCase();
   if (!q) return [];
@@ -94,7 +103,43 @@ export function frequencyFromCode(code) {
   return 3;
 }
 
-/** Parse rime YAML/TSV body: `字\tcode` or `字 code` after `...` */
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`[dict] timeout ${ms}ms: ${label}`)), ms);
+  });
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
+async function fetchText(url, { timeoutMs = LOAD_TIMEOUT_MS } = {}) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl
+    ? setTimeout(() => ctrl.abort(), timeoutMs)
+    : null;
+  try {
+    const res = await fetch(url, { signal: ctrl?.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return await res.text();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+async function fetchJson(url, { timeoutMs = LOAD_TIMEOUT_MS } = {}) {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl
+    ? setTimeout(() => ctrl.abort(), timeoutMs)
+    : null;
+  try {
+    const res = await fetch(url, { signal: ctrl?.signal });
+    if (!res.ok) throw new Error(`HTTP ${res.status} for ${url}`);
+    return await res.json();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
+/** Parse rime YAML/TSV body: `字\tcode` after `...` */
 export function parseRimeDictText(text) {
   const map = new Map();
   const parts = text.split(/\n\.\.\.\s*\n/);
@@ -122,13 +167,11 @@ export function parseRimeDictText(text) {
   return map;
 }
 
-async function fetchJsonMap(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const data = await res.json();
+function ingestObject(data, { clearFreq = false } = {}) {
+  if (clearFreq) freqMap.clear();
   const map = new Map();
   let fallbackRank = 0;
-  for (const [ch, val] of Object.entries(data)) {
+  for (const [ch, val] of Object.entries(data || {})) {
     if (ch.length !== 1) continue;
     if (typeof val === 'string') {
       map.set(ch, val.toUpperCase());
@@ -142,42 +185,119 @@ async function fetchJsonMap(url) {
   return map;
 }
 
-async function fetchYamlMap(url) {
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  return parseRimeDictText(await res.text());
+function applyMap(map, source) {
+  codeMap.clear();
+  map.forEach((v, k) => codeMap.set(k, v));
+  rebuildQuickIndex();
+  loaded = true;
+  dictSource = source;
+  return codeMap;
 }
 
+function applyFallbackDict(reason) {
+  console.warn('[dict] using built-in baseline fallback:', reason);
+  try {
+    const map = ingestObject(FALLBACK_DICT, { clearFreq: true });
+    applyMap(map, 'fallback');
+    return codeMap;
+  } catch (err) {
+    console.error('[dict] fallback ingest failed', err);
+    // Absolute last resort: a few hard-coded radicals
+    const tiny = {
+      日: 'A', 月: 'B', 金: 'C', 木: 'D', 水: 'E', 火: 'F', 土: 'G',
+      竹: 'H', 戈: 'I', 十: 'J', 大: 'K', 中: 'L', 一: 'M', 弓: 'N',
+      人: 'O', 心: 'P', 手: 'Q', 口: 'R', 尸: 'S', 廿: 'T', 山: 'U',
+      女: 'V', 田: 'W', 難: 'X', 卜: 'Y', 明: 'AB', 好: 'VND',
+    };
+    applyMap(ingestObject(tiny, { clearFreq: true }), 'fallback');
+    return codeMap;
+  }
+}
+
+async function tryLoadLocalJson() {
+  let lastErr = null;
+  for (const url of LOCAL_JSON_URLS) {
+    try {
+      console.info('[dict] fetching', url);
+      const data = await fetchJson(url, { timeoutMs: LOAD_TIMEOUT_MS });
+      const map = ingestObject(data, { clearFreq: true });
+      if (map.size < 20) throw new Error(`too few entries (${map.size}) from ${url}`);
+      console.info('[dict] loaded', map.size, 'chars from', url);
+      return { map, url, source: url.includes('baseline') ? 'fallback' : 'full' };
+    } catch (err) {
+      lastErr = err;
+      console.warn('[dict] local load failed:', url, err?.message || err);
+    }
+  }
+  throw lastErr || new Error('all local dictionary URLs failed');
+}
+
+async function tryLoadCdnYaml() {
+  console.info('[dict] fetching CDN yaml', CDN_YAML_URL);
+  const text = await fetchText(CDN_YAML_URL, { timeoutMs: 8000 });
+  const map = parseRimeDictText(text);
+  if (map.size < 20) throw new Error(`CDN yaml too small (${map.size})`);
+  console.info('[dict] loaded', map.size, 'chars from CDN yaml');
+  return map;
+}
+
+/** Quiet background upgrade after fallback — never throws to callers */
+function upgradeInBackground() {
+  (async () => {
+    try {
+      const result = await tryLoadLocalJson();
+      if (result.map.size > codeMap.size) {
+        applyMap(result.map, result.source);
+        console.info('[dict] background upgrade →', codeMap.size, 'chars');
+        window.dispatchEvent(
+          new CustomEvent('dict-upgraded', { detail: { size: codeMap.size, source: dictSource } })
+        );
+      }
+    } catch (err) {
+      try {
+        const map = await tryLoadCdnYaml();
+        if (map.size > codeMap.size) {
+          applyMap(map, 'full');
+          window.dispatchEvent(
+            new CustomEvent('dict-upgraded', { detail: { size: codeMap.size, source: dictSource } })
+          );
+        }
+      } catch (cdnErr) {
+        console.warn('[dict] background upgrade skipped', cdnErr?.message || cdnErr);
+      }
+    }
+  })();
+}
+
+/**
+ * Load dictionary. Always resolves (fallback if needed) so the UI never hangs.
+ * @returns {Promise<Map<string,string>>}
+ */
 export async function loadDictionary() {
-  if (loaded) return codeMap;
+  if (loaded && codeMap.size > 0) return codeMap;
   if (loadPromise) return loadPromise;
 
   loadPromise = (async () => {
-    // Prefer local JSON (prebuilt from rime-cangjie)
     try {
-      const map = await fetchJsonMap('./dict/cangjie5.json');
-      map.forEach((v, k) => codeMap.set(k, v));
-      rebuildQuickIndex();
-      loaded = true;
-      return codeMap;
-    } catch {
-      /* fall through */
-    }
-
-    // CDN YAML fallback (base table)
-    try {
-      const map = await fetchYamlMap(DICT_URLS[1]);
-      map.forEach((v, k) => codeMap.set(k, v));
-      rebuildQuickIndex();
-      loaded = true;
+      const result = await withTimeout(tryLoadLocalJson(), LOAD_TIMEOUT_MS + 500, 'local-json');
+      applyMap(result.map, result.source);
       return codeMap;
     } catch (err) {
-      console.error('Failed to load rime-cangjie dictionary', err);
-      throw err;
+      console.error('[dict] primary load failed or timed out', err);
+      applyFallbackDict(err?.message || String(err));
+      upgradeInBackground();
+      return codeMap;
     }
   })();
 
-  return loadPromise;
+  try {
+    return await loadPromise;
+  } catch (err) {
+    // Should never happen — belt and suspenders
+    console.error('[dict] unexpected loadPromise rejection', err);
+    applyFallbackDict('unexpected rejection');
+    return codeMap;
+  }
 }
 
 export function isCjkChar(ch) {
@@ -190,9 +310,6 @@ export function isCjkChar(ch) {
   );
 }
 
-/**
- * Analyze Traditional Chinese practice text against the dictionary.
- */
 export function analyzeText(text) {
   const chars = [...text].filter((c) => isCjkChar(c));
   const unique = new Set(chars);
@@ -233,7 +350,6 @@ export function analyzeText(text) {
   };
 }
 
-/** Extract typeable CJK chars that exist in the dictionary (preserve order). */
 export function extractTypeableSequence(text) {
   const seq = [];
   for (const ch of text) {
@@ -246,12 +362,12 @@ export function extractTypeableSequence(text) {
 
 export async function loadPracticeChars() {
   try {
-    const res = await fetch('./dict/practice_chars.json');
-    if (res.ok) return await res.json();
-  } catch {
-    /* ignore */
+    const data = await fetchJson('./dict/practice_chars.json', { timeoutMs: 2000 });
+    if (Array.isArray(data) && data.length) return data;
+  } catch (err) {
+    console.warn('[dict] practice_chars.json failed, using embedded list', err?.message || err);
   }
-  return [...'日月金木水火土竹戈十大中一弓人心手口山女田明華港國愛龍天地'];
+  return [...'日月金木水火土竹戈十大中一弓人心手口尸廿山女田卜難明林炎昌天本早華港國愛地好安家學生時年東西南北春夏秋冬風雨電車門開問看見語書文字漢香花草魚鳥馬我你他龍鳳灣粵臺機腦'];
 }
 
 export const SAMPLE_TEXTS = [
