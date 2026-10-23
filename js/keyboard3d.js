@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { CANGJIE_RADICALS } from './cangjieData.js';
+import { THEMES } from './themeManager.js';
 
 const ROW_LAYOUT = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
@@ -12,28 +13,30 @@ const KEY_H = 0.28;
 const KEY_D = 0.9;
 const GAP = 0.12;
 
-function createKeyTexture(letter, radical) {
+const DEFAULT_KB = THEMES.cyberpunk.keyboard;
+const DEFAULT_SCREEN = THEMES.cyberpunk.screen;
+
+function createKeyTexture(letter, radical, palette = DEFAULT_KB) {
   const size = 128;
   const canvas = document.createElement('canvas');
   canvas.width = size;
   canvas.height = size;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#0c1528';
+  ctx.fillStyle = palette.texBg;
   ctx.fillRect(0, 0, size, size);
 
-  // subtle edge
-  ctx.strokeStyle = 'rgba(0, 229, 255, 0.35)';
+  ctx.strokeStyle = palette.texBorder;
   ctx.lineWidth = 3;
   ctx.strokeRect(4, 4, size - 8, size - 8);
 
-  ctx.fillStyle = '#00e5ff';
+  ctx.fillStyle = palette.texLetter;
   ctx.font = 'bold 36px Orbitron, sans-serif';
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(letter, size * 0.5, size * 0.32);
 
-  ctx.fillStyle = '#e8f4ff';
+  ctx.fillStyle = palette.texRadical;
   ctx.font = 'bold 48px "Noto Sans TC", "Microsoft JhengHei", sans-serif';
   ctx.fillText(radical || '·', size * 0.5, size * 0.68);
 
@@ -47,12 +50,15 @@ export class VirtualKeyboard {
   constructor(scene) {
     this.group = new THREE.Group();
     this.group.name = 'keyboard';
-    this.keys = new Map(); // letter -> { mesh, baseY, pressUntil, state }
+    this.keys = new Map();
     this.hintLetters = new Set();
     this.visible = true;
     this.homeY = 0;
     this.hiddenY = -6.5;
     this.targetGroupY = 0;
+    this.palette = { ...DEFAULT_KB };
+    this.baseMat = null;
+    this.rimMat = null;
     scene.add(this.group);
 
     this._buildKeys();
@@ -69,62 +75,102 @@ export class VirtualKeyboard {
     return this.visible;
   }
 
+  applyTheme(palette) {
+    this.palette = { ...DEFAULT_KB, ...palette };
+    const p = this.palette;
+
+    if (this.baseMat) {
+      this.baseMat.color.setHex(p.baseColor);
+      this.baseMat.emissive.setHex(p.baseEmissive);
+      this.baseMat.emissiveIntensity = p.baseEmissiveIntensity;
+    }
+    if (this.rimMat) {
+      this.rimMat.color.setHex(p.rimColor);
+      this.rimMat.emissive.setHex(p.rimEmissive);
+      this.rimMat.emissiveIntensity = p.rimEmissiveIntensity;
+    }
+
+    this.keys.forEach((key, letter) => {
+      const radical = CANGJIE_RADICALS[letter] || '';
+      const oldMap = key.topMat.map;
+      const texture = createKeyTexture(letter, radical, p);
+      key.topMat.map = texture;
+      key.topMat.needsUpdate = true;
+      if (oldMap) oldMap.dispose();
+
+      key.sideMat.color.setHex(p.sideColor);
+      key.sideMat.metalness = p.metalness;
+      key.sideMat.roughness = p.roughness;
+      key.sideMat.emissive.setHex(p.sideEmissive);
+      key.sideMat.emissiveIntensity = p.sideEmissiveIntensity;
+
+      if (key.state === 'idle') {
+        key.topMat.emissive.setHex(p.topEmissive);
+        key.topMat.emissiveIntensity = p.topEmissiveIntensity;
+      } else if (key.state === 'hint') {
+        key.topMat.emissive.setHex(p.hintTop);
+        key.topMat.emissiveIntensity = 0.55;
+        key.sideMat.emissive.setHex(p.hintSide);
+        key.sideMat.emissiveIntensity = 0.9;
+      }
+    });
+  }
+
   _buildBase() {
+    const p = this.palette;
     const geo = new THREE.BoxGeometry(12.5, 0.2, 5.2);
-    const mat = new THREE.MeshStandardMaterial({
-      color: 0x0a1220,
+    this.baseMat = new THREE.MeshStandardMaterial({
+      color: p.baseColor,
       metalness: 0.6,
       roughness: 0.35,
-      emissive: 0x001a28,
-      emissiveIntensity: 0.4,
+      emissive: p.baseEmissive,
+      emissiveIntensity: p.baseEmissiveIntensity,
     });
-    const base = new THREE.Mesh(geo, mat);
+    const base = new THREE.Mesh(geo, this.baseMat);
     base.position.set(0, -0.25, 0);
     base.receiveShadow = true;
     this.group.add(base);
 
-    // neon rim
     const rimGeo = new THREE.BoxGeometry(12.7, 0.05, 5.4);
-    const rimMat = new THREE.MeshStandardMaterial({
-      color: 0x00e5ff,
-      emissive: 0x00e5ff,
-      emissiveIntensity: 0.8,
+    this.rimMat = new THREE.MeshStandardMaterial({
+      color: p.rimColor,
+      emissive: p.rimEmissive,
+      emissiveIntensity: p.rimEmissiveIntensity,
       metalness: 0.2,
       roughness: 0.5,
     });
-    const rim = new THREE.Mesh(rimGeo, rimMat);
+    const rim = new THREE.Mesh(rimGeo, this.rimMat);
     rim.position.set(0, -0.38, 0);
     this.group.add(rim);
   }
 
   _buildKeys() {
+    const p = this.palette;
     ROW_LAYOUT.forEach((row, rowIndex) => {
       const rowWidth = row.length * (KEY_W + GAP) - GAP;
       const startX = -rowWidth / 2 + KEY_W / 2;
-      // stagger middle/bottom rows slightly like QWERTY
       const stagger = rowIndex === 1 ? 0.35 : rowIndex === 2 ? 0.9 : 0;
       const z = 1.4 - rowIndex * (KEY_D + GAP);
 
       row.forEach((letter, i) => {
         const radical = CANGJIE_RADICALS[letter] || '';
-        const texture = createKeyTexture(letter, radical);
+        const texture = createKeyTexture(letter, radical, p);
         const geo = new THREE.BoxGeometry(KEY_W, KEY_H, KEY_D);
         const sideMat = new THREE.MeshStandardMaterial({
-          color: 0x121c30,
-          metalness: 0.45,
-          roughness: 0.4,
-          emissive: 0x001018,
-          emissiveIntensity: 0.25,
+          color: p.sideColor,
+          metalness: p.metalness,
+          roughness: p.roughness,
+          emissive: p.sideEmissive,
+          emissiveIntensity: p.sideEmissiveIntensity,
         });
         const topMat = new THREE.MeshStandardMaterial({
           map: texture,
           color: 0xffffff,
           metalness: 0.15,
           roughness: 0.55,
-          emissive: 0x003344,
-          emissiveIntensity: 0.2,
+          emissive: p.topEmissive,
+          emissiveIntensity: p.topEmissiveIntensity,
         });
-        // Box faces: +X -X +Y -Y +Z -Z
         const materials = [sideMat, sideMat, topMat, sideMat, sideMat, sideMat];
         const mesh = new THREE.Mesh(geo, materials);
         mesh.castShadow = true;
@@ -139,7 +185,7 @@ export class VirtualKeyboard {
           mesh,
           baseY: y,
           pressUntil: 0,
-          state: 'idle', // idle | press | correct | error | hint
+          state: 'idle',
           topMat,
           sideMat,
         });
@@ -156,7 +202,7 @@ export class VirtualKeyboard {
     if (!key) return;
     key.pressUntil = performance.now() + durationMs;
     if (key.state === 'idle' || key.state === 'hint') {
-      this._applyEmissive(key, 0x00e5ff, 0.85);
+      this._applyEmissive(key, this.palette.press, 0.85);
     }
   }
 
@@ -164,7 +210,7 @@ export class VirtualKeyboard {
     const key = this.keys.get(letter?.toUpperCase());
     if (!key) return;
     key.state = 'correct';
-    this._applyEmissive(key, 0x3dff9a, 1.2);
+    this._applyEmissive(key, this.palette.correct, 1.2);
     key.pressUntil = performance.now() + 280;
     setTimeout(() => this._restoreKey(key), 300);
   }
@@ -173,29 +219,28 @@ export class VirtualKeyboard {
     const key = this.keys.get(letter?.toUpperCase());
     if (!key) return;
     key.state = 'error';
-    this._applyEmissive(key, 0xff2d6a, 1.1);
+    this._applyEmissive(key, this.palette.error, 1.1);
     key.pressUntil = performance.now() + 280;
     setTimeout(() => this._restoreKey(key), 300);
   }
 
-  /** Strong sequential teaching pulse (gold + cyan) */
   pulseKey(letter, durationMs = 480) {
     const key = this.keys.get(letter?.toUpperCase());
     if (!key) return;
+    const p = this.palette;
     key.state = 'hint';
     this.hintLetters.add(letter.toUpperCase());
     key.pressUntil = performance.now() + Math.min(durationMs, 420);
-    this._applyEmissive(key, 0xffc857, 1.55);
-    key.topMat.emissive.setHex(0x00e5ff);
+    this._applyEmissive(key, p.hintSide, 1.55);
+    key.topMat.emissive.setHex(p.hintTop);
     key.topMat.emissiveIntensity = 1.2;
-    key.sideMat.emissive.setHex(0xffc857);
+    key.sideMat.emissive.setHex(p.hintSide);
     key.sideMat.emissiveIntensity = 1.4;
-    // settle to sustained hint glow
     setTimeout(() => {
       if (!this.hintLetters.has(letter.toUpperCase())) return;
-      key.topMat.emissive.setHex(0x00e5ff);
+      key.topMat.emissive.setHex(p.hintTop);
       key.topMat.emissiveIntensity = 0.55;
-      key.sideMat.emissive.setHex(0xffc857);
+      key.sideMat.emissive.setHex(p.hintSide);
       key.sideMat.emissiveIntensity = 0.9;
       key.state = 'hint';
     }, durationMs);
@@ -203,17 +248,17 @@ export class VirtualKeyboard {
 
   setHints(letters) {
     this.clearHints();
+    const p = this.palette;
     (letters || []).forEach((l) => {
       const letter = l.toUpperCase();
       const key = this.keys.get(letter);
       if (!key) return;
       this.hintLetters.add(letter);
       key.state = 'hint';
-      this._applyEmissive(key, 0xffc857, 1.0);
-      // cyan-gold mix via color
-      key.topMat.emissive.setHex(0x00e5ff);
+      this._applyEmissive(key, p.hintSide, 1.0);
+      key.topMat.emissive.setHex(p.hintTop);
       key.topMat.emissiveIntensity = 0.55;
-      key.sideMat.emissive.setHex(0xffc857);
+      key.sideMat.emissive.setHex(p.hintSide);
       key.sideMat.emissiveIntensity = 0.9;
     });
   }
@@ -227,19 +272,20 @@ export class VirtualKeyboard {
   }
 
   _restoreKey(key) {
+    const p = this.palette;
     if (this.hintLetters.has(key.mesh.userData.letter) && key.state !== 'error' && key.state !== 'correct') {
       key.state = 'hint';
-      key.topMat.emissive.setHex(0x00e5ff);
+      key.topMat.emissive.setHex(p.hintTop);
       key.topMat.emissiveIntensity = 0.55;
-      key.sideMat.emissive.setHex(0xffc857);
+      key.sideMat.emissive.setHex(p.hintSide);
       key.sideMat.emissiveIntensity = 0.9;
       return;
     }
     key.state = 'idle';
-    key.topMat.emissive.setHex(0x003344);
-    key.topMat.emissiveIntensity = 0.2;
-    key.sideMat.emissive.setHex(0x001018);
-    key.sideMat.emissiveIntensity = 0.25;
+    key.topMat.emissive.setHex(p.topEmissive);
+    key.topMat.emissiveIntensity = p.topEmissiveIntensity;
+    key.sideMat.emissive.setHex(p.sideEmissive);
+    key.sideMat.emissiveIntensity = p.sideEmissiveIntensity;
   }
 
   _applyEmissive(key, hex, intensity) {
@@ -250,7 +296,6 @@ export class VirtualKeyboard {
   }
 
   update(now = performance.now()) {
-    // Slide keyboard on/off screen
     this.group.position.y += (this.targetGroupY - this.group.position.y) * 0.12;
 
     this.keys.forEach((key) => {
@@ -261,9 +306,6 @@ export class VirtualKeyboard {
   }
 }
 
-/**
- * Floating holographic panel above the keyboard
- */
 export class FloatingScreen {
   constructor(scene) {
     this.group = new THREE.Group();
@@ -274,6 +316,7 @@ export class FloatingScreen {
     this.homeScale = 1;
     this.focusScale = 1.35;
     this.targetScale = 1;
+    this.palette = { ...DEFAULT_SCREEN };
     scene.add(this.group);
 
     this.canvas = document.createElement('canvas');
@@ -292,15 +335,13 @@ export class FloatingScreen {
     this.panel = new THREE.Mesh(geo, mat);
     this.group.add(this.panel);
 
-    const frame = new THREE.Mesh(
-      new THREE.PlaneGeometry(6.7, 3.45),
-      new THREE.MeshBasicMaterial({
-        color: 0x00e5ff,
-        transparent: true,
-        opacity: 0.15,
-        side: THREE.DoubleSide,
-      })
-    );
+    this.frameMat = new THREE.MeshBasicMaterial({
+      color: DEFAULT_SCREEN.frame,
+      transparent: true,
+      opacity: 0.15,
+      side: THREE.DoubleSide,
+    });
+    const frame = new THREE.Mesh(new THREE.PlaneGeometry(6.7, 3.45), this.frameMat);
     frame.position.z = -0.02;
     this.group.add(frame);
 
@@ -310,6 +351,12 @@ export class FloatingScreen {
     this.status = 'idle';
     this.context = '';
     this.keyboardVisible = true;
+    this.redraw();
+  }
+
+  applyTheme(palette) {
+    this.palette = { ...DEFAULT_SCREEN, ...palette };
+    if (this.frameMat) this.frameMat.color.setHex(this.palette.frame);
     this.redraw();
   }
 
@@ -335,18 +382,19 @@ export class FloatingScreen {
 
   redraw() {
     const { ctx, canvas } = this;
+    const p = this.palette;
     const w = canvas.width;
     const h = canvas.height;
 
     ctx.clearRect(0, 0, w, h);
 
     const grad = ctx.createLinearGradient(0, 0, w, h);
-    grad.addColorStop(0, 'rgba(8, 18, 36, 0.92)');
-    grad.addColorStop(1, 'rgba(4, 10, 22, 0.95)');
+    grad.addColorStop(0, p.bg0);
+    grad.addColorStop(1, p.bg1);
     ctx.fillStyle = grad;
     ctx.fillRect(0, 0, w, h);
 
-    ctx.strokeStyle = 'rgba(0, 229, 255, 0.08)';
+    ctx.strokeStyle = p.grid;
     ctx.lineWidth = 1;
     for (let x = 0; x < w; x += 48) {
       ctx.beginPath();
@@ -361,38 +409,38 @@ export class FloatingScreen {
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(0, 229, 255, 0.55)';
+    ctx.strokeStyle = p.border;
     ctx.lineWidth = 4;
     ctx.strokeRect(12, 12, w - 24, h - 24);
 
-    ctx.fillStyle = 'rgba(0, 229, 255, 0.15)';
+    ctx.fillStyle = p.modeBg;
     ctx.fillRect(40, 40, 160, 44);
-    ctx.fillStyle = '#00e5ff';
+    ctx.fillStyle = p.modeFg;
     ctx.font = '600 22px Orbitron, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText(this.modeLabel, 120, 62);
 
     if (this.context) {
-      ctx.fillStyle = 'rgba(255, 200, 87, 0.2)';
+      ctx.fillStyle = p.contextBg;
       ctx.fillRect(w - 220, 40, 180, 44);
-      ctx.fillStyle = '#ffc857';
+      ctx.fillStyle = p.contextFg;
       ctx.font = '600 20px Orbitron, sans-serif';
       ctx.fillText(this.context, w - 130, 62);
     }
 
     const fontSize = this.keyboardVisible ? 220 : 280;
-    ctx.fillStyle = '#e8f4ff';
+    ctx.fillStyle = p.char;
     ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
     ctx.textAlign = 'center';
-    ctx.shadowColor = 'rgba(0, 229, 255, 0.45)';
+    ctx.shadowColor = p.charGlow;
     ctx.shadowBlur = 28;
     ctx.fillText(this.targetChar || '—', w / 2, h * 0.48);
     ctx.shadowBlur = 0;
 
-    let bufColor = '#00e5ff';
-    if (this.status === 'ok') bufColor = '#3dff9a';
-    if (this.status === 'err') bufColor = '#ff2d6a';
+    let bufColor = p.idle;
+    if (this.status === 'ok') bufColor = p.ok;
+    if (this.status === 'err') bufColor = p.err;
     ctx.fillStyle = bufColor;
     ctx.font = '600 48px Orbitron, sans-serif';
     ctx.fillText((this.buffer || '·').replace(/_/g, '·'), w / 2, h * 0.82);

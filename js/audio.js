@@ -1,9 +1,31 @@
 /**
- * Lightweight Web Audio synth for key / success / error feedback
+ * SFX via Web Audio synth + shared volume / mute
  */
+
+const STORAGE_KEY = 'vincys-typing-lab-audio';
+
+function loadPrefs() {
+  try {
+    return JSON.parse(localStorage.getItem(STORAGE_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function savePrefs(partial) {
+  const next = { ...loadPrefs(), ...partial };
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
 export class GameAudio {
   constructor() {
-    this.enabled = true;
+    const prefs = loadPrefs();
+    this.enabled = prefs.sfxEnabled !== false;
+    this.volume = Number.isFinite(prefs.sfxVolume) ? prefs.sfxVolume : 0.7;
     this.ctx = null;
   }
 
@@ -20,24 +42,31 @@ export class GameAudio {
   }
 
   setEnabled(on) {
-    this.enabled = on;
+    this.enabled = !!on;
+    savePrefs({ sfxEnabled: this.enabled });
   }
 
   toggle() {
-    this.enabled = !this.enabled;
+    this.setEnabled(!this.enabled);
     return this.enabled;
   }
 
+  setVolume(vol01) {
+    this.volume = Math.max(0, Math.min(1, Number(vol01) || 0));
+    savePrefs({ sfxVolume: this.volume });
+  }
+
   playTone(freq, duration, type = 'sine', gain = 0.08) {
-    if (!this.enabled) return;
+    if (!this.enabled || this.volume <= 0) return;
     const ctx = this.ensureCtx();
     if (!ctx) return;
 
     const osc = ctx.createOscillator();
     const g = ctx.createGain();
+    const level = gain * this.volume;
     osc.type = type;
     osc.frequency.value = freq;
-    g.gain.setValueAtTime(gain, ctx.currentTime);
+    g.gain.setValueAtTime(level, ctx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
     osc.connect(g);
     g.connect(ctx.destination);
@@ -51,8 +80,6 @@ export class GameAudio {
 
   success() {
     if (!this.enabled) return;
-    const ctx = this.ensureCtx();
-    if (!ctx) return;
     const notes = [523.25, 659.25, 783.99];
     notes.forEach((f, i) => {
       setTimeout(() => this.playTone(f, 0.18, 'sine', 0.09), i * 70);

@@ -2,8 +2,17 @@
 <html lang="zh-Hant">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+  <meta name="theme-color" content="#05080f" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="TypingLab" />
+  <meta name="description" content="Vincy's typing lab — 中文字型輸入拆碼訓練平台" />
   <title>Vincy's typing lab</title>
+  <link rel="manifest" href="manifest.json" />
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet" />
@@ -78,6 +87,42 @@
               </span>
               <input type="checkbox" id="fast-practice-toggle" />
             </label>
+
+            <div class="settings-theme" id="settings-theme">
+              <p class="settings-title">主題切換 / Theme</p>
+              <div class="theme-swatches" id="theme-swatches" role="listbox" aria-label="Theme"></div>
+            </div>
+
+            <div class="settings-audio" id="settings-audio">
+              <p class="settings-title">音訊控制</p>
+              <label class="settings-toggle" for="bgm-toggle">
+                <span>
+                  <strong>背景音樂 (BGM)</strong>
+                  <em>開啟後隨機播放曲目</em>
+                </span>
+                <input type="checkbox" id="bgm-toggle" />
+              </label>
+              <label class="audio-slider" for="bgm-volume">
+                <span class="audio-slider-head">
+                  <span>BGM 音量</span>
+                  <span id="bgm-volume-label">35%</span>
+                </span>
+                <input type="range" id="bgm-volume" min="0" max="100" value="35" step="1" />
+              </label>
+              <label class="audio-slider" for="sfx-volume">
+                <span class="audio-slider-head">
+                  <span>音效 (SFX) 音量</span>
+                  <span id="sfx-volume-label">70%</span>
+                </span>
+                <input type="range" id="sfx-volume" min="0" max="100" value="70" step="1" />
+              </label>
+              <p class="track-info" id="track-info" aria-live="polite">♪ Playing: —</p>
+            </div>
+
+            <button type="button" class="install-btn" id="btn-install" hidden>
+              <span class="gear-icon" aria-hidden="true">⬇</span>
+              <span>安裝應用程式</span>
+            </button>
 
             <div class="settings-ref">
               <div class="settings-ref-header">

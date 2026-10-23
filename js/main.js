@@ -2,6 +2,13 @@ import * as THREE from 'three';
 import { VirtualKeyboard, FloatingScreen } from './keyboard3d.js';
 import { TypingGame, buildRefSheet } from './game.js';
 import { loadDictionary, SAMPLE_TEXTS, codeMap } from './dictLoader.js';
+import { registerServiceWorker, setupInstallPrompt } from './pwa.js';
+import { bgm } from './bgm.js';
+import { themeManager } from './themeManager.js';
+
+registerServiceWorker();
+setupInstallPrompt();
+themeManager.init();
 
 const canvas = document.getElementById('game-canvas');
 
@@ -11,8 +18,35 @@ scene.background = new THREE.Color(0x05080f);
 scene.fog = new THREE.FogExp2(0x05080f, 0.035);
 
 const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
-const camHome = { pos: new THREE.Vector3(0, 6.8, 9.5), look: new THREE.Vector3(0, 1.2, 0), fov: 42 };
-const camFocus = { pos: new THREE.Vector3(0, 4.2, 7.2), look: new THREE.Vector3(0, 2.2, 0), fov: 38 };
+
+/** Desktop / landscape defaults */
+const CAM_DESKTOP_HOME = { pos: new THREE.Vector3(0, 6.8, 9.5), look: new THREE.Vector3(0, 1.2, 0), fov: 42 };
+const CAM_DESKTOP_FOCUS = { pos: new THREE.Vector3(0, 4.2, 7.2), look: new THREE.Vector3(0, 2.2, 0), fov: 38 };
+/** Portrait mobile: pull back + higher FOV so screen + keyboard fit */
+const CAM_MOBILE_HOME = { pos: new THREE.Vector3(0, 8.6, 12.2), look: new THREE.Vector3(0, 1.6, 0), fov: 52 };
+const CAM_MOBILE_FOCUS = { pos: new THREE.Vector3(0, 5.5, 8.5), look: new THREE.Vector3(0, 2.4, 0), fov: 46 };
+
+function isMobilePortrait() {
+  return window.innerWidth <= 900 && window.innerHeight > window.innerWidth;
+}
+
+function activeCamHome() {
+  return isMobilePortrait() ? CAM_MOBILE_HOME : CAM_DESKTOP_HOME;
+}
+function activeCamFocus() {
+  return isMobilePortrait() ? CAM_MOBILE_FOCUS : CAM_DESKTOP_FOCUS;
+}
+
+const camHome = {
+  pos: activeCamHome().pos.clone(),
+  look: activeCamHome().look.clone(),
+  fov: activeCamHome().fov,
+};
+const camFocus = {
+  pos: activeCamFocus().pos.clone(),
+  look: activeCamFocus().look.clone(),
+  fov: activeCamFocus().fov,
+};
 const camTarget = {
   pos: camHome.pos.clone(),
   look: camHome.look.clone(),
@@ -41,13 +75,13 @@ keyLight.castShadow = true;
 keyLight.shadow.mapSize.set(1024, 1024);
 scene.add(keyLight);
 
-const cyanPoint = new THREE.PointLight(0x00e5ff, 2.2, 28);
-cyanPoint.position.set(-4, 4, 3);
-scene.add(cyanPoint);
+const accentA = new THREE.PointLight(0x00e5ff, 2.2, 28);
+accentA.position.set(-4, 4, 3);
+scene.add(accentA);
 
-const magentaPoint = new THREE.PointLight(0xff2d6a, 1.4, 22);
-magentaPoint.position.set(5, 3, 2);
-scene.add(magentaPoint);
+const accentB = new THREE.PointLight(0xff2d6a, 1.4, 22);
+accentB.position.set(5, 3, 2);
+scene.add(accentB);
 
 const fill = new THREE.PointLight(0x4d7cff, 0.8, 30);
 fill.position.set(0, 5, -4);
@@ -72,17 +106,63 @@ keyboard.homeY = 0;
 
 const screen = new FloatingScreen(scene);
 
+themeManager.bindScene({
+  scene,
+  ambient,
+  keyLight,
+  accentA,
+  accentB,
+  fill,
+  floorMat,
+  keyboard,
+  screen,
+});
+themeManager.applyThree(themeManager.current);
+
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
+
+function applyViewportCamera(preserveKeyboardState = true) {
+  const home = activeCamHome();
+  const focus = activeCamFocus();
+  camHome.pos.copy(home.pos);
+  camHome.look.copy(home.look);
+  camHome.fov = home.fov;
+  camFocus.pos.copy(focus.pos);
+  camFocus.look.copy(focus.look);
+  camFocus.fov = focus.fov;
+
+  const showKb = preserveKeyboardState ? keyboard.visible : true;
+  const target = showKb ? camHome : camFocus;
+  camTarget.pos.copy(target.pos);
+  camTarget.look.copy(target.look);
+  camTarget.fov = target.fov;
+}
 
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  camera.aspect = w / h;
+  // Prefer visualViewport on mobile browsers (address bar / keyboard chrome)
+  const vv = window.visualViewport;
+  const rw = vv ? vv.width : w;
+  const rh = vv ? vv.height : h;
+
+  camera.aspect = rw / Math.max(rh, 1);
+  applyViewportCamera(true);
+  camera.fov = camTarget.fov;
   camera.updateProjectionMatrix();
+
+  const pr = Math.min(window.devicePixelRatio || 1, isMobilePortrait() ? 1.75 : 2);
+  renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
+
+  document.documentElement.style.setProperty('--app-height', `${h}px`);
 }
 window.addEventListener('resize', resize);
+window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', resize);
+}
 resize();
 
 // —— HUD ——
@@ -127,6 +207,33 @@ const game = new TypingGame({
   screen,
   onHudUpdate: updateHud,
   onRaceUpdate: updateRaceHud,
+});
+
+// —— BGM + first-gesture autoplay unlock ——
+function unlockAudio() {
+  game.audio.ensureCtx();
+  bgm.unlock();
+}
+
+['pointerdown', 'keydown', 'touchstart'].forEach((evt) => {
+  window.addEventListener(evt, unlockAudio, { capture: true, passive: true });
+});
+
+bgm.onTrackChange(({ name, enabled, playing }) => {
+  const el = document.getElementById('track-info');
+  if (!el) return;
+  if (!enabled) {
+    el.textContent = `♪ BGM 已關閉 · ${name}`;
+  } else if (playing) {
+    el.textContent = `♪ Playing: ${name}`;
+  } else {
+    el.textContent = `♪ Ready: ${name}（點擊或按鍵後播放）`;
+  }
+});
+
+bgm.loadPlaylist().then(() => {
+  if (bgm.enabled) bgm.start();
+  else bgm._emitTrack();
 });
 
 buildRefSheet();
@@ -180,6 +287,7 @@ document.querySelectorAll('.mode-btn').forEach((btn) => {
 function setKeyboardVisible(show) {
   keyboard.setVisible(show);
   screen.setKeyboardVisible(show);
+  applyViewportCamera(true);
   const target = show ? camHome : camFocus;
   camTarget.pos.copy(target.pos);
   camTarget.look.copy(target.look);
@@ -233,6 +341,87 @@ if (fastToggle) {
   game.setFastPractice(fastToggle.checked);
   fastToggle.addEventListener('change', () => {
     game.setFastPractice(fastToggle.checked);
+  });
+}
+
+// —— Theme swatches ——
+function buildThemeSwatches() {
+  const host = document.getElementById('theme-swatches');
+  if (!host) return;
+  host.innerHTML = '';
+  themeManager.list().forEach((theme) => {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'theme-swatch';
+    btn.dataset.theme = theme.id;
+    btn.setAttribute('role', 'option');
+    btn.setAttribute('aria-label', `${theme.nameZh} ${theme.name}`);
+    btn.title = `${theme.nameZh} · ${theme.name}`;
+    btn.innerHTML = `
+      <span class="theme-swatch-colors" aria-hidden="true">
+        <i style="background:${theme.swatch[0]}"></i>
+        <i style="background:${theme.swatch[1]}"></i>
+        <i style="background:${theme.swatch[2]}"></i>
+      </span>
+      <span class="theme-swatch-label">${theme.nameZh}</span>
+    `;
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      themeManager.setTheme(theme.id);
+      syncThemeSwatches();
+    });
+    host.appendChild(btn);
+  });
+  syncThemeSwatches();
+}
+
+function syncThemeSwatches() {
+  const id = themeManager.currentId;
+  document.querySelectorAll('.theme-swatch').forEach((btn) => {
+    const on = btn.dataset.theme === id;
+    btn.classList.toggle('active', on);
+    btn.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+buildThemeSwatches();
+
+// —— Audio settings (BGM / SFX) ——
+const bgmToggle = document.getElementById('bgm-toggle');
+const bgmVolume = document.getElementById('bgm-volume');
+const bgmVolumeLabel = document.getElementById('bgm-volume-label');
+const sfxVolume = document.getElementById('sfx-volume');
+const sfxVolumeLabel = document.getElementById('sfx-volume-label');
+
+if (bgmToggle) {
+  bgmToggle.checked = bgm.enabled;
+  bgmToggle.addEventListener('change', () => {
+    unlockAudio();
+    bgm.setEnabled(bgmToggle.checked);
+  });
+}
+
+if (bgmVolume && bgmVolumeLabel) {
+  const pct = Math.round(bgm.volume * 100);
+  bgmVolume.value = String(pct);
+  bgmVolumeLabel.textContent = `${pct}%`;
+  bgmVolume.addEventListener('input', () => {
+    const v = Number(bgmVolume.value) / 100;
+    bgmVolumeLabel.textContent = `${bgmVolume.value}%`;
+    bgm.setVolume(v);
+    unlockAudio();
+  });
+}
+
+if (sfxVolume && sfxVolumeLabel) {
+  const pct = Math.round(game.audio.volume * 100);
+  sfxVolume.value = String(pct);
+  sfxVolumeLabel.textContent = `${pct}%`;
+  sfxVolume.addEventListener('input', () => {
+    const v = Number(sfxVolume.value) / 100;
+    sfxVolumeLabel.textContent = `${sfxVolume.value}%`;
+    game.audio.setVolume(v);
+    unlockAudio();
   });
 }
 
@@ -315,7 +504,7 @@ function beginDrill() {
   document.getElementById('start-screen').classList.add('hidden');
   document.getElementById('race-track').classList.add('hidden');
   setSettingsOpen(false);
-  game.audio.ensureCtx();
+  unlockAudio();
   game.setRaceLimit(0);
   game.start('drill');
 }
@@ -324,7 +513,7 @@ function beginRace() {
   if (!raceLoaded) return;
   document.getElementById('start-screen').classList.add('hidden');
   setSettingsOpen(false);
-  game.audio.ensureCtx();
+  unlockAudio();
   game.setRaceLimit(Number(document.getElementById('race-time-limit').value));
   game.start('race');
 }
@@ -456,19 +645,49 @@ window.addEventListener('keydown', (e) => {
 });
 
 function onPointer(clientX, clientY) {
-  if (!keyboard.visible) return;
+  if (!keyboard.visible) return false;
   const rect = canvas.getBoundingClientRect();
+  if (!rect.width || !rect.height) return false;
   pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
   pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(pointer, camera);
   const hits = raycaster.intersectObjects(keyboard.getIntersectable(), false);
   if (hits.length) {
     const letter = hits[0].object.userData.letter;
-    if (letter && game.running) game.handleLetter(letter);
+    if (letter && game.running) {
+      game.handleLetter(letter);
+      return true;
+    }
   }
+  return false;
 }
 
-canvas.addEventListener('pointerdown', (e) => onPointer(e.clientX, e.clientY));
+// Pointer Events cover mouse + touch; prevent scroll/zoom jumps on key taps
+canvas.style.touchAction = 'none';
+canvas.addEventListener(
+  'pointerdown',
+  (e) => {
+    const hit = onPointer(e.clientX, e.clientY);
+    if (hit) {
+      e.preventDefault();
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+  },
+  { passive: false }
+);
+canvas.addEventListener(
+  'touchstart',
+  (e) => {
+    if (!e.touches?.length) return;
+    const t = e.touches[0];
+    if (onPointer(t.clientX, t.clientY)) e.preventDefault();
+  },
+  { passive: false }
+);
 
 // —— Animate ——
 const lookCurrent = camHome.look.clone();
