@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Vincy's typing lab</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Noto+Sans+TC:wght@400;700&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+  <div id="app">
+    <canvas id="game-canvas"></canvas>
+
+    <header class="hud-top">
+      <div class="brand">
+        <span class="brand-mark">倉</span>
+        <div class="brand-text">
+          <strong>Vincy's typing lab</strong>
+          <span>中文字型輸入拆碼訓練平台</span>
+        </div>
+      </div>
+
+      <div class="stats">
+        <div class="stat">
+          <span class="stat-label">WPM/CPM</span>
+          <span class="stat-value" id="stat-wpm">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">準確率</span>
+          <span class="stat-value" id="stat-accuracy">100%</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">連擊</span>
+          <span class="stat-value" id="stat-streak">0</span>
+        </div>
+        <div class="stat">
+          <span class="stat-label">時間</span>
+          <span class="stat-value" id="stat-timer">0:00</span>
+        </div>
+      </div>
+
+      <div class="header-controls" id="header-controls">
+        <div class="header-controls-row">
+          <div class="mode-switch" role="group" aria-label="Input mode">
+            <button type="button" class="mode-btn active" data-mode="quick" id="mode-quick">速成</button>
+            <button type="button" class="mode-btn" data-mode="cangjie" id="mode-cangjie">倉頡</button>
+          </div>
+
+          <div class="settings-wrap">
+            <button type="button" class="gear-btn" id="btn-settings" aria-expanded="false" title="選項 (Esc)">
+              <span class="gear-icon" aria-hidden="true">⚙</span>
+              <span>選項</span>
+            </button>
+            <div class="settings-panel hidden" id="settings-panel" role="dialog" aria-label="Options">
+              <p class="settings-title">練習難度</p>
+              <div class="diff-options">
+                <button type="button" class="diff-btn active" data-diff="1">初級 · 短碼</button>
+                <button type="button" class="diff-btn" data-diff="2">中級</button>
+                <button type="button" class="diff-btn" data-diff="3">高級 · 長碼</button>
+              </div>
+
+            <div class="settings-delay">
+              <p class="settings-title">預設顯示時間</p>
+              <select id="reveal-delay-select" aria-label="Default display time">
+                <option value="1000">1.0 秒</option>
+                <option value="1500" selected>1.5 秒</option>
+                <option value="2000">2.0 秒</option>
+                <option value="0">僅手動（不自動跳轉）</option>
+              </select>
+            </div>
+
+            <label class="settings-toggle" for="fast-practice-toggle">
+              <span>
+                <strong>跳過完成彈窗</strong>
+                <em>Fast Practice Mode</em>
+              </span>
+              <input type="checkbox" id="fast-practice-toggle" />
+            </label>
+
+            <div class="settings-ref">
+              <div class="settings-ref-header">
+                <p class="settings-title">倉頡字根表</p>
+                <button type="button" class="ref-toggle" id="ref-toggle" aria-expanded="false">展開</button>
+              </div>
+              <div class="ref-grid collapsed-grid" id="ref-grid"></div>
+            </div>
+
+            <p class="settings-hint">Esc 關閉 · Ctrl+R 開啟字根表</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Race HUD: width matches options block, directly below it -->
+        <div class="race-track hidden" id="race-track" aria-live="polite">
+          <span class="race-track-left" id="race-progress-label">0%</span>
+          <span class="race-track-count" id="race-count-label">0 / 0</span>
+          <div class="race-bar" title="Progress">
+            <div class="race-bar-fill" id="race-bar-fill"></div>
+          </div>
+          <span class="race-track-title" id="race-metrics">文章</span>
+          <span class="race-track-right" id="race-cpm-label">0 CPM</span>
+        </div>
+      </div>
+    </header>
+
+    <footer class="hud-bottom">
+      <button type="button" class="action-btn" id="btn-hint" title="Ctrl+H">
+        <span class="action-key">⌃H</span>
+        拆字 / Hint
+      </button>
+      <button type="button" class="action-btn" id="btn-next" title="Ctrl+N">
+        <span class="action-key">⌃N</span>
+        下一個
+      </button>
+      <button type="button" class="action-btn" id="btn-sound" title="Ctrl+S">
+        <span class="action-key">⌃S</span>
+        <span id="sound-label">音效 ON</span>
+      </button>
+      <button type="button" class="action-btn" id="btn-keyboard" title="Tab">
+        <span class="action-key">Tab</span>
+        <span id="keyboard-label">隱藏鍵盤</span>
+      </button>
+      <button type="button" class="action-btn" id="btn-restart" title="重置本局成績">
+        重新開始
+      </button>
+      <button type="button" class="action-btn" id="btn-menu" title="返回主選單">
+        返回主選單
+      </button>
+    </footer>
+
+    <div class="typed-overlay" id="typed-overlay" aria-live="polite">
+      <span class="typed-prompt">輸入</span>
+      <span class="typed-buffer" id="typed-buffer">_</span>
+    </div>
+
+    <!-- 速成 candidate picker: Windows IME style 1–9 / page / Space=#1 -->
+    <div class="candidate-panel hidden" id="candidate-panel" role="listbox" aria-label="速成候選字">
+      <div class="candidate-panel-header">
+        <span>速成候選</span>
+        <code id="candidate-code-label">—</code>
+        <span class="candidate-page" id="candidate-page-label">1 / 1</span>
+        <span class="candidate-hint">1–9 直接選字 · Space=#1 · PgDn/− 下頁</span>
+      </div>
+      <div class="candidate-list" id="candidate-list"></div>
+    </div>
+
+    <!-- Reveal / animated 拆碼 card -->
+    <div class="modal-backdrop hidden" id="reveal-modal">
+      <div class="reveal-card" role="dialog" aria-labelledby="reveal-title">
+        <button type="button" class="reveal-close" id="reveal-close" aria-label="Close">&times;</button>
+        <div class="freeze-tag hidden" id="freeze-tag">⏸️ 已凍結 (按 Space 繼續)</div>
+        <div class="reveal-char" id="reveal-char">明</div>
+        <div class="reveal-meta">
+          <span id="reveal-pinyin">拆碼動畫</span>
+          <span class="dot">·</span>
+          <span id="reveal-meaning">碼長 —</span>
+        </div>
+
+        <div class="structure-tag" id="structure-tag">左右結構</div>
+
+        <div class="reveal-section">
+          <h3 id="reveal-title">拆碼步驟</h3>
+          <div class="decomp-steps" id="decomp-steps"></div>
+          <p class="decomp" id="reveal-decomp"></p>
+        </div>
+
+        <div class="reveal-codes">
+          <div>
+            <span class="code-label">倉頡</span>
+            <code id="reveal-cangjie">AB</code>
+          </div>
+          <div>
+            <span class="code-label">速成</span>
+            <code id="reveal-quick">AB</code>
+          </div>
+        </div>
+
+        <div class="reveal-candidates" id="reveal-candidates">
+          <h3>同碼候選（速成）</h3>
+          <div class="candidate-list" id="reveal-candidate-list"></div>
+        </div>
+
+        <p class="reveal-hint-note">速成：1–9 直接選字 / Space=#1 · 倉頡：Space 提交</p>
+        <p class="reveal-keys-hint">答題卡：Space 凍結 | N / Enter 下一個</p>
+        <div class="reveal-countdown" id="reveal-countdown" aria-hidden="true">
+          <div class="reveal-countdown-fill" id="reveal-countdown-fill"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="flash" id="flash"></div>
+
+    <!-- Start menu -->
+    <div class="start-screen" id="start-screen">
+      <div class="start-panel start-panel-wide menu-container">
+        <h1>Vincy's typing lab</h1>
+        <p class="start-subtitle">中文字型輸入拆碼訓練平台</p>
+        <p class="start-desc" id="dict-status">正在載入字典…</p>
+
+        <div class="start-diff">
+          <span class="start-section-label">難度</span>
+          <div class="diff-options inline">
+            <button type="button" class="diff-btn active" data-diff="1">初級</button>
+            <button type="button" class="diff-btn" data-diff="2">中級</button>
+            <button type="button" class="diff-btn" data-diff="3">高級</button>
+          </div>
+        </div>
+
+        <div class="play-mode-grid">
+          <button type="button" class="start-btn" id="btn-start-drill" disabled>單字練習</button>
+          <button type="button" class="start-btn alt" id="btn-start-race" disabled>限時挑戰 / 文章競速</button>
+        </div>
+
+        <div class="race-setup" id="race-setup">
+          <p class="start-section-label">文章競速</p>
+          <div class="sample-list" id="sample-list"></div>
+          <div class="upload-row">
+            <label class="upload-btn">
+              上傳 .txt 文章
+              <input type="file" id="txt-upload" accept=".txt,text/plain" hidden />
+            </label>
+            <select id="race-time-limit" aria-label="Time limit">
+              <option value="0">無時限</option>
+              <option value="60">60 秒</option>
+              <option value="120" selected>120 秒</option>
+              <option value="180">180 秒</option>
+              <option value="300">300 秒</option>
+            </select>
+          </div>
+          <div class="text-analytics hidden" id="text-analytics">
+            <div><span>字數</span><strong id="an-total">0</strong></div>
+            <div><span>不重複</span><strong id="an-unique">0</strong></div>
+            <div><span>平均碼長</span><strong id="an-avg">0</strong></div>
+            <div><span>難度</span><strong id="an-diff">—</strong></div>
+          </div>
+          <p class="race-ready-note" id="race-ready-note">請選擇範例或上傳文章</p>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script type="importmap">
+  {
+    "imports": {
+      "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+      "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+    }
+  }
+  </script>
+  <script type="module" src="js/main.js"></script>
+</body>
+</html>

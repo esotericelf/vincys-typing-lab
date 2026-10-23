@@ -1,0 +1,32 @@
+# Dependencies / caches
+node_modules/
+.npm/
+.cache/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+Desktop.ini
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Env / secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+serviceAccount*.json
+
+# Logs / build
+*.log
+dist/
+build/
+tmp/
+temp/
+
+# Local scratch
+dict_sample.txt
