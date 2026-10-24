@@ -1772,9 +1772,58 @@ body.is-mobile .settings-quick {
   display: block;
 }
 
-body.is-mobile .settings-panel {
-  width: min(340px, calc(100vw - 1rem));
-  max-height: min(82vh, 720px);
+/* Dim overlay while 選項 is open (panel is portaled to #app) */
+.settings-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  z-index: 190;
+  background: rgba(0, 0, 0, 0.55);
+  pointer-events: auto;
+}
+
+.settings-backdrop.hidden {
+  display: none !important;
+}
+
+body.is-mobile.settings-open .settings-backdrop {
+  display: block;
+}
+
+/*
+ * Mobile 選項 sheet: fixed, centered, above the keypad — never clipped
+ * by zone-upper overflow or stuck to the gear button's right edge.
+ */
+body.is-mobile .settings-panel,
+body.is-mobile.settings-open #settings-panel {
+  position: fixed;
+  top: max(0.6rem, env(safe-area-inset-top, 0px));
+  left: 0.6rem;
+  right: 0.6rem;
+  bottom: auto;
+  width: auto;
+  max-width: none;
+  /* Leave clear space for the docked 2D keypad + candidates */
+  max-height: calc(
+    var(--app-height, 100dvh) - min(42vh, 20rem) - 1.25rem -
+      env(safe-area-inset-bottom, 0px)
+  );
+  margin: 0;
+  transform: none;
+  z-index: 200;
+  border-radius: 0;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55);
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+}
+
+body.is-mobile:not(.mobile-playing) .settings-panel,
+body.is-mobile:not(.mobile-playing).settings-open #settings-panel {
+  max-height: calc(
+    var(--app-height, 100dvh) - 1.5rem - env(safe-area-inset-bottom, 0px)
+  );
 }
 
 body.is-mobile.mobile-playing .mobile-ui {

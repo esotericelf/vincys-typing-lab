@@ -347,10 +347,36 @@ buildRefSheet();
 // —— Settings / difficulty ——
 const settingsPanel = document.getElementById('settings-panel');
 const btnSettings = document.getElementById('btn-settings');
+const settingsWrap = document.querySelector('.settings-wrap');
+const settingsHomeParent = settingsPanel?.parentElement || settingsWrap;
+let settingsBackdrop = document.getElementById('settings-backdrop');
+if (!settingsBackdrop) {
+  settingsBackdrop = document.createElement('div');
+  settingsBackdrop.id = 'settings-backdrop';
+  settingsBackdrop.className = 'settings-backdrop hidden';
+  settingsBackdrop.setAttribute('aria-hidden', 'true');
+  document.getElementById('app')?.appendChild(settingsBackdrop);
+}
 
 function setSettingsOpen(open) {
-  settingsPanel.classList.toggle('hidden', !open);
-  btnSettings.setAttribute('aria-expanded', open ? 'true' : 'false');
+  const wantOpen = !!open;
+  settingsPanel.classList.toggle('hidden', !wantOpen);
+  btnSettings.setAttribute('aria-expanded', wantOpen ? 'true' : 'false');
+  document.body.classList.toggle('settings-open', wantOpen);
+
+  // Mobile: portal panel to #app so overflow:hidden on the 3D stage cannot clip it
+  const appEl = document.getElementById('app');
+  if (wantOpen && isMobileViewport() && appEl) {
+    appEl.appendChild(settingsPanel);
+    settingsBackdrop?.classList.remove('hidden');
+    settingsBackdrop?.setAttribute('aria-hidden', 'false');
+  } else {
+    settingsBackdrop?.classList.add('hidden');
+    settingsBackdrop?.setAttribute('aria-hidden', 'true');
+    if (settingsHomeParent && settingsPanel.parentElement !== settingsHomeParent) {
+      settingsHomeParent.appendChild(settingsPanel);
+    }
+  }
 }
 
 function toggleSettings() {
@@ -362,10 +388,13 @@ btnSettings.addEventListener('click', (e) => {
   toggleSettings();
 });
 
+settingsBackdrop?.addEventListener('click', () => setSettingsOpen(false));
+
 document.addEventListener('click', (e) => {
-  if (!settingsPanel.classList.contains('hidden')) {
-    if (!e.target.closest('.settings-wrap')) setSettingsOpen(false);
-  }
+  if (settingsPanel.classList.contains('hidden')) return;
+  if (e.target.closest('#settings-panel') || e.target.closest('#btn-settings')) return;
+  if (e.target.closest('.settings-wrap') && !isMobileViewport()) return;
+  setSettingsOpen(false);
 });
 
 function applyDifficulty(diff, syncButtons = true) {
