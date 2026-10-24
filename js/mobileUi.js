@@ -85,6 +85,7 @@ export class MobileUi {
 
     const row4 = document.createElement('div');
     row4.className = 'mobile-key-row row-4';
+    row4.appendChild(this._makeActionKey('prev-page', '上頁', '候選上頁'));
     row4.appendChild(this._makeActionKey('backspace', '⌫', '退格'));
     const space = this._makeActionKey('space', '空白', 'Space');
     space.classList.add('mobile-key-space');
@@ -147,6 +148,10 @@ export class MobileUi {
     }
     if (action === 'next-page' && this.game.quickPicking) {
       this.game.nextCandidatePage();
+      return;
+    }
+    if (action === 'prev-page' && this.game.quickPicking) {
+      this.game.prevCandidatePage();
     }
   }
 
@@ -312,16 +317,58 @@ export class MobileUi {
       return;
     }
 
+    const page = state.page ?? 0;
+    const pages = Math.max(1, state.pages ?? 1);
+    const total = state.total ?? state.items.length;
+
     this._setCandidateZoneVisible(true);
     this.candidateStrip.innerHTML = '';
 
     const meta = document.createElement('div');
     meta.className = 'mobile-candidate-meta';
-    meta.innerHTML = `<code>${state.code || '—'}</code><span>${state.pageLabel || ''}</span>`;
+
+    const codeEl = document.createElement('code');
+    codeEl.textContent = state.code || '—';
+    meta.appendChild(codeEl);
+
+    const nav = document.createElement('div');
+    nav.className = 'mobile-candidate-nav';
+
+    const prevBtn = document.createElement('button');
+    prevBtn.type = 'button';
+    prevBtn.className = 'mobile-candidate-page-btn';
+    prevBtn.textContent = '‹ 上頁';
+    prevBtn.disabled = page <= 0;
+    prevBtn.setAttribute('aria-label', '上一頁候選');
+    prevBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.game.prevCandidatePage();
+    });
+
+    const pageEl = document.createElement('span');
+    pageEl.className = 'mobile-candidate-page-label';
+    pageEl.textContent = `${page + 1} / ${pages} · ${total}字`;
+
+    const nextBtn = document.createElement('button');
+    nextBtn.type = 'button';
+    nextBtn.className = 'mobile-candidate-page-btn';
+    nextBtn.textContent = '下頁 ›';
+    nextBtn.disabled = page >= pages - 1;
+    nextBtn.setAttribute('aria-label', '下一頁候選');
+    nextBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      this.game.nextCandidatePage();
+    });
+
+    nav.appendChild(prevBtn);
+    nav.appendChild(pageEl);
+    nav.appendChild(nextBtn);
+    meta.appendChild(nav);
     this.candidateStrip.appendChild(meta);
 
     const track = document.createElement('div');
     track.className = 'mobile-candidate-track';
+    track.setAttribute('aria-label', '左右滑動切換候選頁');
     state.items.forEach((entry, i) => {
       const btn = document.createElement('button');
       btn.type = 'button';
@@ -332,6 +379,35 @@ export class MobileUi {
       btn.addEventListener('click', () => this.game.commitPageCandidate(i));
       track.appendChild(btn);
     });
+
+    // Swipe left/right on the strip to flip candidate pages
+    let swipeX = 0;
+    let swipeY = 0;
+    let swiping = false;
+    track.addEventListener(
+      'touchstart',
+      (e) => {
+        if (!e.touches?.[0]) return;
+        swipeX = e.touches[0].clientX;
+        swipeY = e.touches[0].clientY;
+        swiping = true;
+      },
+      { passive: true }
+    );
+    track.addEventListener(
+      'touchend',
+      (e) => {
+        if (!swiping || !e.changedTouches?.[0]) return;
+        swiping = false;
+        const dx = e.changedTouches[0].clientX - swipeX;
+        const dy = e.changedTouches[0].clientY - swipeY;
+        if (Math.abs(dx) < 48 || Math.abs(dx) < Math.abs(dy)) return;
+        if (dx < 0) this.game.nextCandidatePage();
+        else this.game.prevCandidatePage();
+      },
+      { passive: true }
+    );
+
     this.candidateStrip.appendChild(track);
   }
 

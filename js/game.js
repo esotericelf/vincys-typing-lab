@@ -573,6 +573,9 @@ export class TypingGame {
         selectedIndex: this.selectedCandidateIndex,
         code: codeText,
         pageLabel: pageText,
+        page: this.candidatePage,
+        pages,
+        total: this._candidateList?.length || 0,
       });
     }
 
@@ -642,6 +645,9 @@ export class TypingGame {
       selectedIndex: this.selectedCandidateIndex,
       code: this.buffer || '—',
       pageLabel: `${this.candidatePage + 1} / ${this.getCandidatePageCount()}`,
+      page: this.candidatePage,
+      pages: this.getCandidatePageCount(),
+      total: this._candidateList?.length || 0,
     });
     this._updatePickOverlay();
     this.audio.keypress();

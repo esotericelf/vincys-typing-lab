@@ -1945,9 +1945,14 @@ body.mobile-native-ime .zone-candidates {
 }
 
 .mobile-key-space {
-  flex: 3.2 1 0;
+  flex: 2.4 1 0;
   color: var(--cyan);
   border-color: color-mix(in srgb, var(--cyan) 55%, var(--border));
+}
+
+.mobile-key-row.row-4 .mobile-key-action {
+  flex: 1 1 0;
+  font-size: 0.72rem;
 }
 
 /* Horizontal candidate strip above keypad (速成) */
@@ -1982,14 +1987,60 @@ body.is-mobile.mobile-playing .mobile-candidate-strip:not(.hidden) {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 0.5rem;
   font-size: 0.68rem;
   color: var(--muted);
+  flex-wrap: wrap;
 }
 
 .mobile-candidate-meta code {
   font-family: var(--font-display);
-  color: var(--cyan);
+  color: #00f0ff;
   letter-spacing: 0.12em;
+  flex: 0 0 auto;
+}
+
+.mobile-candidate-nav {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.35rem;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.mobile-candidate-page-label {
+  font-family: var(--font-display);
+  font-size: 0.68rem;
+  color: #e6edf3;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+}
+
+.mobile-candidate-page-btn {
+  flex: 0 0 auto;
+  min-height: 36px;
+  min-width: 3.4rem;
+  padding: 0.25rem 0.55rem;
+  border: 1px solid rgba(0, 240, 255, 0.55);
+  background: #161b22;
+  color: #00f0ff;
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  font-weight: 600;
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mobile-candidate-page-btn:disabled {
+  opacity: 0.35;
+  cursor: default;
+  border-color: rgba(255, 255, 255, 0.15);
+  color: #8b949e;
+}
+
+.mobile-candidate-page-btn:not(:disabled):active {
+  background: rgba(0, 240, 255, 0.18);
 }
 
 .mobile-candidate-track {
@@ -1998,7 +2049,8 @@ body.is-mobile.mobile-playing .mobile-candidate-strip:not(.hidden) {
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
-  padding-bottom: 0.1rem;
+  padding: 0.15rem 0.1rem 0.2rem;
+  touch-action: pan-x;
 }
 
 .mobile-candidate-card {
