@@ -221,10 +221,11 @@ export class MobileUi {
     body.classList.toggle('mobile-virtual-kb', this.mobile && !this.nativeIme);
 
     if (this.imeToggle) {
-      this.imeToggle.hidden = !this.mobile;
       this.imeToggle.setAttribute('aria-pressed', this.nativeIme ? 'true' : 'false');
-      this.imeToggle.textContent = this.nativeIme ? '切換鍵盤 · 原生' : '切換鍵盤 · 虛擬';
-      this.imeToggle.title = '切換 原生/虛擬鍵盤';
+      const label = document.getElementById('settings-ime-label');
+      const text = this.nativeIme ? '鍵盤 · 原生 IME' : '鍵盤 · 虛擬鍵';
+      if (label) label.textContent = text;
+      else this.imeToggle.title = '切換 原生/虛擬鍵盤';
     }
 
     const playing = document.body.classList.contains('mobile-playing');

@@ -240,6 +240,10 @@ function updateHud(data) {
   document.getElementById('stat-timer').textContent = data.timer;
   const soundLabel = document.getElementById('sound-label');
   if (soundLabel) soundLabel.textContent = data.sound ? '音效 ON' : '音效 OFF';
+  const settingsSound = document.getElementById('settings-sound-label');
+  if (settingsSound) {
+    settingsSound.textContent = data.sound ? '音效 ON' : '音效 OFF';
+  }
 }
 
 function updateRaceHud(data) {
@@ -421,14 +425,39 @@ refToggle.addEventListener('click', (e) => {
   e.stopPropagation();
   setRefOpen(refGrid.classList.contains('collapsed-grid'));
 });
-document.getElementById('btn-hint').addEventListener('click', () => game.showReveal(true));
-document.getElementById('btn-next').addEventListener('click', () => {
+function doHint() {
+  game.showReveal(true);
+}
+function doNext() {
   if (game.isRevealVisible()) game.skipRevealToNext();
   else game.nextCharacter();
-});
-document.getElementById('btn-sound').addEventListener('click', () => {
+}
+function doToggleSound() {
   game.toggleSound();
   game._tickHud();
+}
+
+document.getElementById('btn-hint').addEventListener('click', doHint);
+document.getElementById('btn-next').addEventListener('click', doNext);
+document.getElementById('btn-sound').addEventListener('click', doToggleSound);
+
+// Mobile 選項 panel: consolidated quick actions (closes for gameplay / menu)
+document.getElementById('settings-quick')?.addEventListener('click', (e) => {
+  const btn = e.target.closest('[data-quick]');
+  if (!btn) return;
+  e.stopPropagation();
+  const action = btn.dataset.quick;
+  const shouldClose = btn.dataset.close === '1';
+
+  if (action === 'hint') doHint();
+  else if (action === 'next') doNext();
+  else if (action === 'restart') restartSession();
+  else if (action === 'sound') doToggleSound();
+  else if (action === 'ime') {
+    // Handled by MobileUi click on #btn-ime-toggle — avoid double-toggle
+  } else if (action === 'menu') showMenu();
+
+  if (shouldClose) setSettingsOpen(false);
 });
 document.getElementById('reveal-close').addEventListener('click', () => game.hideReveal());
 document.getElementById('reveal-modal').addEventListener('click', (e) => {

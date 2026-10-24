@@ -326,6 +326,47 @@ body {
   display: none;
 }
 
+/* Desktop: hide mobile quick actions (toolbar stays in footer) */
+.settings-quick {
+  display: none;
+  margin: 0 0 0.85rem;
+  padding-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-quick-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0.4rem;
+  margin-bottom: 0.75rem;
+}
+
+.settings-action {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  width: 100%;
+  min-height: 44px;
+  padding: 0.5rem 0.65rem;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.86rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.settings-action:active {
+  border-color: var(--cyan);
+  background: color-mix(in srgb, var(--cyan) 16%, transparent);
+}
+
+.settings-action[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
 .settings-title {
   margin: 0 0 0.5rem;
   font-family: var(--font-display);
@@ -1664,48 +1705,14 @@ body.is-mobile.mobile-playing .typed-overlay {
   padding: 0.3rem 0.7rem;
 }
 
+/* Middle toolbar hidden on mobile — actions live in 選項 */
+body.is-mobile .zone-middle,
 body.is-mobile.mobile-playing .zone-middle {
-  position: relative;
-  left: auto;
-  right: auto;
-  bottom: auto;
-  flex: 0 0 auto;
-  z-index: 10;
-  pointer-events: auto;
-  background: var(--bg-panel-solid);
-  border-top: 1px solid var(--border);
-}
-
-body.is-mobile.mobile-playing .hud-bottom {
-  position: relative;
-  bottom: auto;
-  left: auto;
-  right: auto;
-  padding: 0.35rem 0.4rem;
-  background: transparent;
-  gap: 0.28rem;
-  z-index: 10;
-  flex-wrap: wrap;
-  justify-content: center;
-  pointer-events: auto;
-}
-
-body.is-mobile.mobile-playing .hud-bottom .action-btn {
-  min-height: 40px;
-  padding: 0.32rem 0.48rem;
-  font-size: 0.68rem;
-}
-
-body.is-mobile.mobile-playing .hud-bottom .action-key {
-  display: none;
+  display: none !important;
 }
 
 body.is-mobile #btn-keyboard {
   display: none !important;
-}
-
-body.is-mobile.mobile-playing #btn-ime-toggle {
-  display: inline-flex !important;
 }
 
 body.is-mobile.mobile-playing .zone-lower {
@@ -1714,12 +1721,26 @@ body.is-mobile.mobile-playing .zone-lower {
   right: auto;
   bottom: auto;
   flex: 0 0 auto;
-  height: min(42vh, 20rem);
-  max-height: 46%;
+  height: min(44vh, 21rem);
+  max-height: 48%;
   z-index: 10;
   overflow: hidden;
   pointer-events: auto;
   background: var(--bg-panel-solid);
+}
+
+/* Compact header: prioritize mode + stats + 選項 */
+body.is-mobile.mobile-playing .brand-text span {
+  display: none;
+}
+
+body.is-mobile .settings-quick {
+  display: block;
+}
+
+body.is-mobile .settings-panel {
+  width: min(340px, calc(100vw - 1rem));
+  max-height: min(82vh, 720px);
 }
 
 body.is-mobile.mobile-playing .mobile-ui {

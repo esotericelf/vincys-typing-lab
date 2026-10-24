@@ -64,6 +64,34 @@
               <span>選項</span>
             </button>
             <div class="settings-panel hidden" id="settings-panel" role="dialog" aria-label="Options">
+              <!-- Mobile-only: action toolbar consolidated into 選項 -->
+              <div class="settings-quick" id="settings-quick">
+                <p class="settings-title">快捷操作</p>
+                <div class="settings-quick-grid" role="group" aria-label="Gameplay actions">
+                  <button type="button" class="settings-action" data-quick="hint" data-close="1">
+                    <span aria-hidden="true">💡</span> 拆字提示
+                  </button>
+                  <button type="button" class="settings-action" data-quick="next" data-close="1">
+                    <span aria-hidden="true">⏭️</span> 下一個
+                  </button>
+                  <button type="button" class="settings-action" data-quick="restart" data-close="1">
+                    <span aria-hidden="true">🔄</span> 重新開始
+                  </button>
+                </div>
+                <p class="settings-title">開關 / 導航</p>
+                <div class="settings-quick-grid" role="group" aria-label="Toggle controls">
+                  <button type="button" class="settings-action" data-quick="sound" data-close="0" id="settings-sound-btn">
+                    <span aria-hidden="true">🔊</span> <span id="settings-sound-label">音效開關</span>
+                  </button>
+                  <button type="button" class="settings-action ime-toggle" data-quick="ime" data-close="0" id="btn-ime-toggle" aria-pressed="false">
+                    <span aria-hidden="true">⌨️</span> <span id="settings-ime-label">切換鍵盤</span>
+                  </button>
+                  <button type="button" class="settings-action" data-quick="menu" data-close="1">
+                    <span aria-hidden="true">⚙️</span> 主選單
+                  </button>
+                </div>
+              </div>
+
               <p class="settings-title">練習難度</p>
               <div class="diff-options">
                 <button type="button" class="diff-btn active" data-diff="1">初級 · 短碼</button>
@@ -161,6 +189,7 @@
       </section>
 
       <section class="zone-middle" id="zone-middle">
+        <!-- Desktop action toolbar; hidden on mobile (controls live in 選項) -->
         <footer class="hud-bottom">
           <button type="button" class="action-btn" id="btn-hint" title="Ctrl+H">
             <span class="action-key">⌃H</span>
@@ -177,9 +206,6 @@
           <button type="button" class="action-btn" id="btn-keyboard" title="Tab">
             <span class="action-key">Tab</span>
             <span id="keyboard-label">隱藏鍵盤</span>
-          </button>
-          <button type="button" class="action-btn ime-toggle" id="btn-ime-toggle" aria-pressed="false" hidden>
-            切換鍵盤
           </button>
           <button type="button" class="action-btn" id="btn-restart" title="重置本局成績">
             重新開始
