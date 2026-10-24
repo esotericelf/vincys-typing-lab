@@ -23,18 +23,46 @@ const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
 /** Desktop / landscape defaults */
 const CAM_DESKTOP_HOME = { pos: new THREE.Vector3(0, 6.8, 9.5), look: new THREE.Vector3(0, 1.2, 0), fov: 42 };
 const CAM_DESKTOP_FOCUS = { pos: new THREE.Vector3(0, 4.2, 7.2), look: new THREE.Vector3(0, 2.2, 0), fov: 38 };
-/**
- * Mobile adaptive: 3D keyboard hidden — frame the character panel in the upper ~45%.
- * (Legacy portrait cams kept as unused fallbacks if needed.)
- */
-const CAM_MOBILE_CHAR = { pos: new THREE.Vector3(0, 5.1, 7.6), look: new THREE.Vector3(0, 3.5, 0), fov: 38 };
 
-function activeCamHome() {
-  if (isMobileViewport()) return CAM_MOBILE_CHAR;
+/**
+ * Mobile camera: pull back / widen FOV on narrow stages so the floating
+ * character panel fits entirely between header and action toolbar.
+ * @param {number} aspect canvas width / height
+ */
+function computeMobileCam(aspect = 1) {
+  const a = Math.max(0.35, Math.min(aspect || 1, 2.5));
+  const portrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
+  // Narrower aspect → higher FOV + larger Z so the 6.5×3.25 plane fits with padding
+  let fov = 40;
+  let z = 8.2;
+  if (a < 0.5) {
+    fov = 54;
+    z = 11.2;
+  } else if (a < 0.62) {
+    fov = 50;
+    z = 10.2;
+  } else if (a < 0.78 || portrait) {
+    fov = 46;
+    z = 9.2;
+  } else {
+    fov = 42;
+    z = 8.4;
+  }
+  const lookY = 3.2;
+  const posY = lookY + 0.25;
+  return {
+    pos: new THREE.Vector3(0, posY, z),
+    look: new THREE.Vector3(0, lookY, 0),
+    fov,
+  };
+}
+
+function activeCamHome(aspect) {
+  if (isMobileViewport()) return computeMobileCam(aspect ?? camera.aspect);
   return CAM_DESKTOP_HOME;
 }
-function activeCamFocus() {
-  if (isMobileViewport()) return CAM_MOBILE_CHAR;
+function activeCamFocus(aspect) {
+  if (isMobileViewport()) return computeMobileCam(aspect ?? camera.aspect);
   return CAM_DESKTOP_FOCUS;
 }
 
@@ -53,6 +81,7 @@ const camTarget = {
   look: camHome.look.clone(),
   fov: camHome.fov,
 };
+const lookCurrent = camHome.look.clone();
 camera.position.copy(camHome.pos);
 camera.lookAt(camHome.look);
 
@@ -123,9 +152,13 @@ themeManager.applyThree(themeManager.current);
 const raycaster = new THREE.Raycaster();
 const pointer = new THREE.Vector2();
 
-function applyViewportCamera(preserveKeyboardState = true) {
-  const home = activeCamHome();
-  const focus = activeCamFocus();
+/** Filled after MobileUi boots; resize() may run from visualViewport early. */
+let mobileUiRef = null;
+
+function applyViewportCamera(preserveKeyboardState = true, aspect) {
+  const a = aspect ?? camera.aspect;
+  const home = activeCamHome(a);
+  const focus = activeCamFocus(a);
   camHome.pos.copy(home.pos);
   camHome.look.copy(home.look);
   camHome.fov = home.fov;
@@ -133,38 +166,95 @@ function applyViewportCamera(preserveKeyboardState = true) {
   camFocus.look.copy(focus.look);
   camFocus.fov = focus.fov;
 
-  const showKb = preserveKeyboardState ? keyboard.visible : true;
+  const mobile = isMobileViewport();
+  const showKb = mobile ? false : preserveKeyboardState ? keyboard.visible : true;
   const target = showKb ? camHome : camFocus;
   camTarget.pos.copy(target.pos);
   camTarget.look.copy(target.look);
   camTarget.fov = target.fov;
 }
 
+/** Measure HUD / keypad chrome and publish CSS vars for the character stage. */
+function syncMobileLayoutMetrics() {
+  const root = document.documentElement;
+  const vv = window.visualViewport;
+  const appH = Math.round(vv?.height || window.innerHeight);
+  root.style.setProperty('--app-height', `${appH}px`);
+
+  if (!isMobileViewport()) {
+    root.style.removeProperty('--mobile-header-h');
+    root.style.removeProperty('--mobile-actions-h');
+    root.style.removeProperty('--mobile-keypad-h');
+    return;
+  }
+
+  const header = document.querySelector('.hud-top');
+  const actions = document.querySelector('.hud-bottom');
+  const keypad = document.getElementById('mobile-ui');
+  const playing = document.body.classList.contains('mobile-playing');
+
+  const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 96;
+  // Keypad uses a fixed CSS height; measure after layout for action/canvas offsets
+  let keypadH = Math.round(appH * 0.44);
+  if (playing && keypad && !keypad.classList.contains('hidden')) {
+    const kh = Math.ceil(keypad.getBoundingClientRect().height);
+    if (kh > 80) keypadH = kh;
+  }
+  const actionsH =
+    playing && actions ? Math.max(44, Math.ceil(actions.getBoundingClientRect().height)) : 0;
+
+  root.style.setProperty('--mobile-header-h', `${headerH}px`);
+  root.style.setProperty('--mobile-actions-h', `${actionsH}px`);
+  root.style.setProperty('--mobile-keypad-h', `${keypadH}px`);
+}
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
-  // Prefer visualViewport on mobile browsers (address bar / keyboard chrome)
   const vv = window.visualViewport;
-  const rw = vv ? vv.width : w;
-  const rh = vv ? vv.height : h;
+  document.documentElement.style.setProperty('--app-height', `${Math.round(vv?.height || h)}px`);
 
-  camera.aspect = rw / Math.max(rh, 1);
-  applyViewportCamera(true);
+  // Layout CSS first so canvas client box reflects the mobile stage
+  syncMobileLayoutMetrics();
+  if (mobileUiRef?.refresh) {
+    mobileUiRef.refresh();
+    syncMobileLayoutMetrics();
+  }
+
+  // Prefer the canvas element's laid-out size (mobile stage ≠ full window)
+  const cw = Math.max(1, canvas.clientWidth || (vv ? vv.width : w));
+  const ch = Math.max(1, canvas.clientHeight || (vv ? vv.height : h));
+  const aspect = cw / ch;
+
+  camera.aspect = aspect;
+  applyViewportCamera(true, aspect);
+  if (isMobileViewport()) {
+    screen.fitMobileStage(aspect);
+  }
   camera.fov = camTarget.fov;
   camera.updateProjectionMatrix();
 
   const pr = Math.min(window.devicePixelRatio || 1, isMobileViewport() ? 1.5 : 2);
   renderer.setPixelRatio(pr);
-  renderer.setSize(w, h, false);
+  renderer.setSize(cw, ch, false);
 
-  document.documentElement.style.setProperty('--app-height', `${h}px`);
+  // Snap camera toward target on orientation changes (avoid long lerp behind UI)
+  if (isMobileViewport() && lookCurrent) {
+    camera.position.lerp(camTarget.pos, 0.85);
+    lookCurrent.lerp(camTarget.look, 0.85);
+    camera.lookAt(lookCurrent);
+  }
 }
+
 window.addEventListener('resize', resize);
-window.addEventListener('orientationchange', () => setTimeout(resize, 120));
+window.addEventListener('orientationchange', () => {
+  setTimeout(resize, 60);
+  setTimeout(resize, 220);
+});
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', resize);
+  window.visualViewport.addEventListener('scroll', resize);
 }
-resize();
 
 // —— HUD ——
 function updateHud(data) {
@@ -213,17 +303,11 @@ const game = new TypingGame({
 function applyMobileScene(mobile) {
   keyboard.setForceHidden(mobile);
   screen.setMobileLayout(mobile);
-  applyViewportCamera(true);
-  const target = mobile || !keyboard.visible ? camFocus : camHome;
-  if (mobile) {
-    camTarget.pos.copy(CAM_MOBILE_CHAR.pos);
-    camTarget.look.copy(CAM_MOBILE_CHAR.look);
-    camTarget.fov = CAM_MOBILE_CHAR.fov;
-  } else {
-    camTarget.pos.copy(target.pos);
-    camTarget.look.copy(target.look);
-    camTarget.fov = target.fov;
-  }
+  syncMobileLayoutMetrics();
+  const aspect =
+    Math.max(1, canvas.clientWidth) / Math.max(1, canvas.clientHeight || 1);
+  applyViewportCamera(true, aspect);
+  if (mobile) screen.fitMobileStage(aspect);
   const kbBtn = document.getElementById('btn-keyboard');
   if (kbBtn) kbBtn.classList.toggle('hidden-on-mobile', mobile);
   const label = document.getElementById('keyboard-label');
@@ -234,8 +318,10 @@ const mobileUi = new MobileUi({
   game,
   onMobileChange: applyMobileScene,
 });
+mobileUiRef = mobileUi;
 game.mobileUi = mobileUi;
 applyMobileScene(mobileUi.mobile);
+resize();
 
 // —— BGM + first-gesture autoplay unlock ——
 function unlockAudio() {
@@ -479,6 +565,7 @@ function showMenu() {
   document.getElementById('start-screen').classList.remove('hidden');
   setSettingsOpen(false);
   mobileUi.syncPlayVisibility();
+  resize();
 }
 
 function restartSession() {
@@ -554,6 +641,7 @@ function beginDrill() {
   game.setRaceLimit(0);
   game.start('drill');
   mobileUi.syncPlayVisibility();
+  resize();
   mobileUi.focusNativeIfNeeded();
 }
 
@@ -565,6 +653,7 @@ function beginRace() {
   game.setRaceLimit(Number(document.getElementById('race-time-limit').value));
   game.start('race');
   mobileUi.syncPlayVisibility();
+  resize();
   mobileUi.focusNativeIfNeeded();
 }
 
@@ -740,7 +829,6 @@ canvas.addEventListener(
 );
 
 // —— Animate ——
-const lookCurrent = camHome.look.clone();
 let t0 = performance.now();
 function animate(now) {
   requestAnimationFrame(animate);

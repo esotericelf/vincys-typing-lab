@@ -338,9 +338,9 @@ export class FloatingScreen {
     this.group = new THREE.Group();
     this.homePos = new THREE.Vector3(0, 3.2, -1.2);
     this.focusPos = new THREE.Vector3(0, 2.4, 0.4);
-    /** Mobile: character panel centered in upper ~45% of the view */
-    this.mobilePos = new THREE.Vector3(0, 3.55, 0.15);
-    this.mobileScale = 1.65;
+    /** Mobile: panel centered in the dedicated stage (header → action bar) */
+    this.mobilePos = new THREE.Vector3(0, 3.2, 0);
+    this.mobileScale = 0.95;
     this.targetPos = this.homePos.clone();
     this.group.position.copy(this.homePos);
     this.homeScale = 1;
@@ -396,6 +396,18 @@ export class FloatingScreen {
     this._applyLayout();
   }
 
+  /**
+   * Fit panel scale to the mobile stage aspect (narrow portrait → smaller).
+   * @param {number} aspect width/height of the WebGL canvas stage
+   */
+  fitMobileStage(aspect = 1) {
+    const a = Math.max(0.35, Math.min(aspect || 1, 2));
+    // Keep the 6.5×3.25 plane fully inside a padded stage frame
+    this.mobileScale = a < 0.55 ? 0.78 : a < 0.7 ? 0.88 : a < 1 ? 0.95 : 1.05;
+    this.mobilePos.set(0, 3.2, 0);
+    if (this.mobileLayout) this._applyLayout();
+  }
+
   setKeyboardVisible(show) {
     this.keyboardVisible = !!show;
     this._applyLayout();
@@ -403,7 +415,6 @@ export class FloatingScreen {
 
   _applyLayout() {
     if (this.mobileLayout) {
-      // Always focus the character panel in the upper viewport on mobile
       this.targetPos.copy(this.mobilePos);
       this.targetScale = this.mobileScale;
       this.keyboardVisible = false;
@@ -418,6 +429,24 @@ export class FloatingScreen {
       this.targetScale = this.focusScale;
     }
     this.redraw();
+  }
+
+  /** Measure glyph so it stays inside the floating frame with padding. */
+  _fitCharFontSize(ctx, char, maxW, maxH, prefer) {
+    let size = prefer;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    while (size > 96) {
+      ctx.font = `bold ${size}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+      const m = ctx.measureText(char || '—');
+      const w = m.width;
+      const h =
+        (m.actualBoundingBoxAscent || size * 0.75) +
+        (m.actualBoundingBoxDescent || size * 0.2);
+      if (w <= maxW && h <= maxH) break;
+      size -= 6;
+    }
+    return size;
   }
 
   setContent({ char, buffer, modeLabel, status, context }) {
@@ -478,32 +507,38 @@ export class FloatingScreen {
       ctx.fillText(this.context, w - 130, 62);
     }
 
-    const fontSize = this.mobileLayout ? 300 : this.keyboardVisible ? 220 : 280;
+    const prefer = this.mobileLayout ? 188 : this.keyboardVisible ? 220 : 280;
+    const maxW = this.mobileLayout ? w * 0.52 : w * 0.62;
+    const maxH = this.mobileLayout ? h * 0.42 : h * 0.5;
+    const fontSize = this._fitCharFontSize(ctx, this.targetChar, maxW, maxH, prefer);
     ctx.fillStyle = p.char;
     ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
     ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.shadowColor = p.charGlow;
-    ctx.shadowBlur = 28;
-    ctx.fillText(this.targetChar || '—', w / 2, h * 0.48);
+    ctx.shadowBlur = this.mobileLayout ? 16 : 28;
+    ctx.fillText(this.targetChar || '—', w / 2, h * (this.mobileLayout ? 0.5 : 0.48));
     ctx.shadowBlur = 0;
 
     let bufColor = p.idle;
     if (this.status === 'ok') bufColor = p.ok;
     if (this.status === 'err') bufColor = p.err;
     ctx.fillStyle = bufColor;
-    ctx.font = '600 48px Orbitron, sans-serif';
+    const bufSize = this.mobileLayout ? 36 : 48;
+    ctx.font = `600 ${bufSize}px Orbitron, sans-serif`;
     ctx.fillText((this.buffer || '·').replace(/_/g, '·'), w / 2, h * 0.82);
 
     this.texture.needsUpdate = true;
   }
 
   update(t) {
-    const bob = Math.sin(t * 0.0012) * 0.12;
+    const bobAmp = this.mobileLayout ? 0.03 : 0.12;
+    const bob = Math.sin(t * 0.0012) * bobAmp;
     this.group.position.x += (this.targetPos.x - this.group.position.x) * 0.08;
     this.group.position.y += (this.targetPos.y + bob - this.group.position.y) * 0.08;
     this.group.position.z += (this.targetPos.z - this.group.position.z) * 0.08;
     const s = this.group.scale.x + (this.targetScale - this.group.scale.x) * 0.08;
     this.group.scale.setScalar(s);
-    this.group.rotation.y = Math.sin(t * 0.0005) * 0.04;
+    this.group.rotation.y = this.mobileLayout ? 0 : Math.sin(t * 0.0005) * 0.04;
   }
 }

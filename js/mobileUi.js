@@ -11,11 +11,14 @@ const ROW_LAYOUT = [
 
 const STORAGE_IME = 'vincy-mobile-ime';
 
-/** Mobile viewport: ≤768px, or touch device on a phone-sized width. */
+/** Mobile viewport: ≤768px, portrait phone/tablet, or coarse-pointer ≤900px. */
 export function isMobileViewport() {
   if (typeof window === 'undefined') return false;
   const w = window.innerWidth;
+  const h = window.innerHeight;
   if (w <= 768) return true;
+  const portrait = h > w;
+  if (portrait && w <= 1024) return true;
   const touch =
     (navigator.maxTouchPoints || 0) > 0 ||
     window.matchMedia('(hover: none) and (pointer: coarse)').matches;
@@ -191,8 +194,7 @@ export class MobileUi {
       });
     }
 
-    window.addEventListener('resize', () => this.refresh());
-    window.addEventListener('orientationchange', () => setTimeout(() => this.refresh(), 120));
+    // Resize / orientation handled by main.js → refresh() so camera + CSS stay in sync
   }
 
   _consumeNativeText(text) {

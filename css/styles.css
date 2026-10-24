@@ -1520,7 +1520,7 @@ html[data-theme="light"] .theme-swatch {
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  height: 50%;
+  height: min(44vh, 22rem);
   max-height: 52vh;
   padding: 0.35rem 0.45rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
   background: linear-gradient(
@@ -1530,6 +1530,7 @@ html[data-theme="light"] .theme-swatch {
     color-mix(in srgb, var(--bg-panel-solid) 96%, var(--bg-deep)) 28%
   );
   pointer-events: none;
+  box-sizing: border-box;
 }
 
 .mobile-ui.hidden {
@@ -1540,18 +1541,64 @@ html[data-theme="light"] .theme-swatch {
   pointer-events: auto;
 }
 
+/*
+ * Mobile playing layout (top → bottom):
+ *   header stats → character stage (canvas) → action toolbar → 2D keypad
+ */
+body.is-mobile.mobile-playing {
+  --mobile-keypad-h: min(44vh, 22rem);
+  --mobile-actions-h: 3rem;
+  --mobile-header-h: 5.5rem;
+}
+
+body.is-mobile.mobile-playing .hud-top {
+  padding: 0.45rem 0.55rem 0.35rem;
+  gap: 0.35rem;
+}
+
+body.is-mobile.mobile-playing .hud-top .stats {
+  gap: 0.25rem;
+}
+
+body.is-mobile.mobile-playing .hud-top .stat-label {
+  font-size: 0.58rem;
+}
+
+body.is-mobile.mobile-playing .hud-top .stat-value {
+  font-size: 0.85rem;
+}
+
+body.is-mobile.mobile-playing #game-canvas {
+  /* Stage only: between header and action bar — no 3D under keypad */
+  position: absolute;
+  top: var(--mobile-header-h, 5.5rem);
+  left: 0;
+  right: 0;
+  bottom: calc(var(--mobile-keypad-h, 44vh) + var(--mobile-actions-h, 3rem));
+  width: 100%;
+  height: auto;
+  z-index: 0;
+  pointer-events: none;
+  touch-action: none;
+}
+
 body.is-mobile.mobile-playing .hud-bottom {
-  /* Compact action strip sitting on the keypad zone boundary */
-  bottom: 50%;
-  padding: 0.3rem 0.4rem 0.45rem;
-  background: linear-gradient(0deg, color-mix(in srgb, var(--bg-deep) 85%, transparent), transparent);
-  gap: 0.3rem;
+  bottom: var(--mobile-keypad-h, 44vh);
+  left: 0;
+  right: 0;
+  padding: 0.28rem 0.4rem 0.35rem;
+  background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+  gap: 0.28rem;
   z-index: 21;
+  flex-wrap: wrap;
+  justify-content: center;
+  max-height: none;
+  pointer-events: auto;
 }
 
 body.is-mobile.mobile-playing .hud-bottom .action-btn {
   min-height: 40px;
-  padding: 0.35rem 0.5rem;
+  padding: 0.32rem 0.48rem;
   font-size: 0.68rem;
 }
 
@@ -1564,8 +1611,17 @@ body.is-mobile #btn-keyboard {
 }
 
 body.is-mobile.mobile-playing .typed-overlay {
-  bottom: calc(50% + 2.8rem);
+  top: auto;
+  bottom: calc(var(--mobile-keypad-h, 44vh) + var(--mobile-actions-h, 3rem) + 0.35rem);
   z-index: 18;
+  pointer-events: none;
+  padding: 0.35rem 0.75rem;
+}
+
+body.is-mobile.mobile-playing .mobile-ui {
+  /* Fixed band — JS publishes measured px into --mobile-keypad-h for canvas/actions */
+  height: min(44vh, 22rem);
+  max-height: none;
 }
 
 body.is-mobile .candidate-panel {
@@ -1573,8 +1629,11 @@ body.is-mobile .candidate-panel {
 }
 
 body.is-mobile #game-canvas {
-  /* Character panel lives in the upper half; reduce needless touch on 3D */
   touch-action: none;
+}
+
+body.is-mobile:not(.mobile-playing) #game-canvas {
+  pointer-events: none;
 }
 
 .ime-toggle {
