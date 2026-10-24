@@ -509,22 +509,37 @@ export class TypingGame {
     return false;
   }
 
+  _isMobileUi() {
+    return typeof document !== 'undefined' && document.body.classList.contains('is-mobile');
+  }
+
   formatBufferDisplay(status) {
     const spaced = this.buffer ? [...this.buffer].join(' ') : '';
     const bracket = spaced ? `[ ${spaced} ]` : '[ ]';
+    const mobile = this._isMobileUi();
     if (status === 'await-space' || (this.buffer && this.buffer === this.getRequired() && this.mode === 'cangjie')) {
-      return `${bracket} → Press [Space] to submit`;
+      return mobile ? `${bracket} → 按空白鍵提交` : `${bracket} → Press [Space] to submit`;
     }
     if (status === 'pick' || this.quickPicking) {
       const pageItems = this.getPageCandidates?.() || [];
       const entry = pageItems[this.selectedCandidateIndex];
       const sel = entry ? ` (${this.selectedCandidateIndex + 1}.${entry.char})` : '';
-      return `${bracket} → Press [1-9] or [Space] to select${sel}`;
+      return mobile
+        ? `${bracket} → 點選候選或按空白${sel}`
+        : `${bracket} → Press [1-9] or [Space] to select${sel}`;
     }
     if (status === 'typing' && this.buffer) {
       return `${bracket} …`;
     }
     return this.buffer || '_';
+  }
+
+  /** Short radical buffer only — never instruction prose on the 3D panel. */
+  formatPanelBuffer(status) {
+    if (this._isMobileUi()) {
+      return this.buffer ? [...this.buffer].join(' ') : '·';
+    }
+    return this.formatBufferDisplay(status);
   }
 
   /** After first+last keys: open Windows-IME style paginated candidates. */
@@ -618,12 +633,14 @@ export class TypingGame {
       bufEl.classList.remove('error', 'success');
       bufEl.classList.add('picking');
     }
+    const mobile = this._isMobileUi();
     this.screen.setContent({
       char: this.target?.char || '—',
-      buffer: label,
+      buffer: this.formatPanelBuffer('pick'),
       modeLabel: '速成',
       status: 'idle',
-      context: `1–9 選字 · Space=#1 · ${this.candidatePage + 1}/${pages}頁`,
+      // Keep instruction off the 3D card on mobile — guidance lives in zone-guide / candidates
+      context: mobile ? '' : `1–9 選字 · Space=#1 · ${this.candidatePage + 1}/${pages}頁`,
     });
   }
 
@@ -895,6 +912,7 @@ export class TypingGame {
   }
 
   _syncScreen(status) {
+    const mobile = this._isMobileUi();
     const raceCtx =
       this.playMode === 'race' && this.raceSeq.length
         ? `${this.raceIndex + 1}/${this.raceSeq.length}`
@@ -902,13 +920,18 @@ export class TypingGame {
 
     const displayBuf = this.formatBufferDisplay(status);
     let context = raceCtx;
-    if (status === 'await-space') context = 'Press [Space] to submit';
-    if (status === 'pick' || this.quickPicking) context = 'Press [1-9] or [Space]';
-    if (status === 'typing' && this.buffer) context = '繼續輸入…';
+    if (!mobile) {
+      if (status === 'await-space') context = 'Press [Space] to submit';
+      if (status === 'pick' || this.quickPicking) context = 'Press [1-9] or [Space]';
+      if (status === 'typing' && this.buffer) context = '繼續輸入…';
+    } else {
+      // Race progress only on the 3D badge; tips stay in the HTML guide banner
+      context = raceCtx || '';
+    }
 
     this.screen.setContent({
       char: this.target?.char || '—',
-      buffer: displayBuf,
+      buffer: this.formatPanelBuffer(status),
       modeLabel: this.mode === 'quick' ? '速成' : '倉頡',
       status: status === 'err' ? 'err' : status === 'ok' ? 'ok' : 'idle',
       context,

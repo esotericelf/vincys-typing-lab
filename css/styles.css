@@ -85,7 +85,8 @@ body {
 
 .zone-middle,
 .zone-lower,
-.zone-candidates {
+.zone-candidates,
+.zone-guide {
   position: absolute;
   left: 0;
   right: 0;
@@ -111,10 +112,22 @@ body {
   overflow: visible;
 }
 
+/* Desktop: guide layer fills play-layout so .typed-overlay can absolute-dock */
+.zone-guide {
+  inset: 0;
+  height: auto;
+  overflow: visible;
+}
+
 .zone-middle > *,
 .zone-lower > *,
-.zone-candidates > * {
+.zone-candidates > *,
+.zone-guide > * {
   pointer-events: auto;
+}
+
+.zone-guide > .typed-overlay {
+  pointer-events: none;
 }
 
 #game-canvas {
@@ -1703,15 +1716,50 @@ body.is-mobile.mobile-playing #game-canvas {
   touch-action: none;
 }
 
-body.is-mobile.mobile-playing .typed-overlay {
-  position: absolute;
-  left: 50%;
-  bottom: 0.45rem;
-  top: auto;
-  transform: translateX(-50%);
-  z-index: 2;
+/* Instruction / buffer banner: own flex row under 3D, above candidates */
+body.is-mobile.mobile-playing .zone-guide {
+  position: relative;
+  inset: auto;
+  left: auto;
+  right: auto;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  height: auto;
+  z-index: 100;
+  overflow: visible;
   pointer-events: none;
-  padding: 0.3rem 0.7rem;
+  background: #0a0e14;
+  border-top: 1px solid rgba(0, 240, 255, 0.25);
+}
+
+body.is-mobile.mobile-playing .typed-overlay {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  top: auto;
+  transform: none;
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0.4rem 0.65rem;
+  z-index: 100;
+  pointer-events: none;
+  justify-content: center;
+  flex-wrap: wrap;
+  background: transparent;
+  border: none;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+
+body.is-mobile.mobile-playing .typed-buffer {
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  white-space: normal;
+  text-align: center;
+  line-height: 1.35;
+  min-width: 0;
 }
 
 /* Desktop toolbar hidden on mobile — actions live in 選項 */
@@ -1852,6 +1900,11 @@ body.is-mobile:not(.mobile-playing) .zone-lower,
 body.is-mobile:not(.mobile-playing) .zone-candidates {
   height: 0;
   overflow: hidden;
+}
+
+body.is-mobile:not(.mobile-playing) .zone-guide {
+  /* Keep absolute overlay behavior under the start menu */
+  inset: 0;
 }
 
 .ime-toggle[aria-pressed='true'] {
