@@ -5,6 +5,7 @@ import { loadDictionary, SAMPLE_TEXTS, codeMap, dictSource } from './dictLoader.
 import { registerServiceWorker, setupInstallPrompt } from './pwa.js';
 import { bgm } from './bgm.js';
 import { themeManager } from './themeManager.js';
+import { MobileUi, isMobileViewport } from './mobileUi.js';
 
 registerServiceWorker();
 setupInstallPrompt();
@@ -22,19 +23,19 @@ const camera = new THREE.PerspectiveCamera(42, 1, 0.1, 100);
 /** Desktop / landscape defaults */
 const CAM_DESKTOP_HOME = { pos: new THREE.Vector3(0, 6.8, 9.5), look: new THREE.Vector3(0, 1.2, 0), fov: 42 };
 const CAM_DESKTOP_FOCUS = { pos: new THREE.Vector3(0, 4.2, 7.2), look: new THREE.Vector3(0, 2.2, 0), fov: 38 };
-/** Portrait mobile: pull back + higher FOV so screen + keyboard fit */
-const CAM_MOBILE_HOME = { pos: new THREE.Vector3(0, 8.6, 12.2), look: new THREE.Vector3(0, 1.6, 0), fov: 52 };
-const CAM_MOBILE_FOCUS = { pos: new THREE.Vector3(0, 5.5, 8.5), look: new THREE.Vector3(0, 2.4, 0), fov: 46 };
-
-function isMobilePortrait() {
-  return window.innerWidth <= 900 && window.innerHeight > window.innerWidth;
-}
+/**
+ * Mobile adaptive: 3D keyboard hidden — frame the character panel in the upper ~45%.
+ * (Legacy portrait cams kept as unused fallbacks if needed.)
+ */
+const CAM_MOBILE_CHAR = { pos: new THREE.Vector3(0, 5.1, 7.6), look: new THREE.Vector3(0, 3.5, 0), fov: 38 };
 
 function activeCamHome() {
-  return isMobilePortrait() ? CAM_MOBILE_HOME : CAM_DESKTOP_HOME;
+  if (isMobileViewport()) return CAM_MOBILE_CHAR;
+  return CAM_DESKTOP_HOME;
 }
 function activeCamFocus() {
-  return isMobilePortrait() ? CAM_MOBILE_FOCUS : CAM_DESKTOP_FOCUS;
+  if (isMobileViewport()) return CAM_MOBILE_CHAR;
+  return CAM_DESKTOP_FOCUS;
 }
 
 const camHome = {
@@ -152,7 +153,7 @@ function resize() {
   camera.fov = camTarget.fov;
   camera.updateProjectionMatrix();
 
-  const pr = Math.min(window.devicePixelRatio || 1, isMobilePortrait() ? 1.75 : 2);
+  const pr = Math.min(window.devicePixelRatio || 1, isMobileViewport() ? 1.5 : 2);
   renderer.setPixelRatio(pr);
   renderer.setSize(w, h, false);
 
@@ -208,6 +209,33 @@ const game = new TypingGame({
   onHudUpdate: updateHud,
   onRaceUpdate: updateRaceHud,
 });
+
+function applyMobileScene(mobile) {
+  keyboard.setForceHidden(mobile);
+  screen.setMobileLayout(mobile);
+  applyViewportCamera(true);
+  const target = mobile || !keyboard.visible ? camFocus : camHome;
+  if (mobile) {
+    camTarget.pos.copy(CAM_MOBILE_CHAR.pos);
+    camTarget.look.copy(CAM_MOBILE_CHAR.look);
+    camTarget.fov = CAM_MOBILE_CHAR.fov;
+  } else {
+    camTarget.pos.copy(target.pos);
+    camTarget.look.copy(target.look);
+    camTarget.fov = target.fov;
+  }
+  const kbBtn = document.getElementById('btn-keyboard');
+  if (kbBtn) kbBtn.classList.toggle('hidden-on-mobile', mobile);
+  const label = document.getElementById('keyboard-label');
+  if (label && mobile) label.textContent = '2D 鍵盤';
+}
+
+const mobileUi = new MobileUi({
+  game,
+  onMobileChange: applyMobileScene,
+});
+game.mobileUi = mobileUi;
+applyMobileScene(mobileUi.mobile);
 
 // —— BGM + first-gesture autoplay unlock ——
 function unlockAudio() {
@@ -295,8 +323,12 @@ document.querySelectorAll('.mode-btn').forEach((btn) => {
   });
 });
 
-// —— Keyboard visibility ——
+// —— Keyboard visibility (desktop 3D only; mobile uses 2D keypad) ——
 function setKeyboardVisible(show) {
+  if (isMobileViewport()) {
+    applyMobileScene(true);
+    return;
+  }
   keyboard.setVisible(show);
   screen.setKeyboardVisible(show);
   applyViewportCamera(true);
@@ -309,6 +341,7 @@ function setKeyboardVisible(show) {
 }
 
 function toggleKeyboard() {
+  if (isMobileViewport()) return;
   setKeyboardVisible(!keyboard.visible);
 }
 
@@ -445,6 +478,7 @@ function showMenu() {
   document.getElementById('race-track').classList.add('hidden');
   document.getElementById('start-screen').classList.remove('hidden');
   setSettingsOpen(false);
+  mobileUi.syncPlayVisibility();
 }
 
 function restartSession() {
@@ -519,6 +553,8 @@ function beginDrill() {
   unlockAudio();
   game.setRaceLimit(0);
   game.start('drill');
+  mobileUi.syncPlayVisibility();
+  mobileUi.focusNativeIfNeeded();
 }
 
 function beginRace() {
@@ -528,6 +564,8 @@ function beginRace() {
   unlockAudio();
   game.setRaceLimit(Number(document.getElementById('race-time-limit').value));
   game.start('race');
+  mobileUi.syncPlayVisibility();
+  mobileUi.focusNativeIfNeeded();
 }
 
 document.getElementById('btn-start-drill').addEventListener('click', beginDrill);

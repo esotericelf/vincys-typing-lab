@@ -14,11 +14,12 @@ import { GameAudio } from './audio.js';
 const VALID_KEYS = new Set(Object.keys(CANGJIE_RADICALS));
 
 export class TypingGame {
-  constructor({ keyboard, screen, onHudUpdate, onRaceUpdate }) {
+  constructor({ keyboard, screen, onHudUpdate, onRaceUpdate, mobileUi = null }) {
     this.keyboard = keyboard;
     this.screen = screen;
     this.onHudUpdate = onHudUpdate;
     this.onRaceUpdate = onRaceUpdate;
+    this.mobileUi = mobileUi;
     this.audio = new GameAudio();
 
     this.mode = 'quick'; // quick | cangjie
@@ -372,6 +373,39 @@ export class TypingGame {
     return getRequiredCode(this.target, this.mode);
   }
 
+  /**
+   * Native OS IME: user commits a Chinese character via system Cangjie/Quick.
+   * Treat as a direct answer check against the target.
+   */
+  handleNativeChar(char) {
+    if (!this.running || !this.target || this.raceEnded || this.revealOpen) return false;
+    if (!char || !/[\u4e00-\u9fff]/.test(char)) return false;
+
+    this.stats.totalKeys += 1;
+    this.audio.keypress();
+
+    if (char === this.target.char) {
+      this.stats.correctKeys += 1;
+      this.quickPicking = false;
+      this.hideCandidates();
+      this.buffer = '';
+      this._onSuccess();
+      this._tickHud();
+      return true;
+    }
+
+    this.stats.streak = 0;
+    this.audio.error();
+    this._flashDom('bad');
+    this._syncScreen('err');
+    setTimeout(() => {
+      if (this.revealOpen) return;
+      this._syncScreen(this.buffer.length ? 'typing' : 'idle');
+    }, 220);
+    this._tickHud();
+    return false;
+  }
+
   handleLetter(letter) {
     if (!this.running || !this.target || this.raceEnded) return;
     if (this.revealOpen) return;
@@ -530,6 +564,17 @@ export class TypingGame {
     const listEl = document.getElementById('candidate-list');
     const codeLabel = document.getElementById('candidate-code-label');
     const pageLabel = document.getElementById('candidate-page-label');
+    const pageText = `${this.candidatePage + 1} / ${pages}`;
+    const codeText = this.buffer || '—';
+
+    if (this.mobileUi) {
+      this.mobileUi.renderCandidates({
+        items: pageItems,
+        selectedIndex: this.selectedCandidateIndex,
+        code: codeText,
+        pageLabel: pageText,
+      });
+    }
 
     if (codeLabel) codeLabel.textContent = this.buffer.toUpperCase() || '—';
     if (pageLabel) {
@@ -592,6 +637,12 @@ export class TypingGame {
         el.classList.toggle('is-selected', idx === i);
       });
     }
+    this.mobileUi?.renderCandidates({
+      items: pageItems,
+      selectedIndex: this.selectedCandidateIndex,
+      code: this.buffer || '—',
+      pageLabel: `${this.candidatePage + 1} / ${this.getCandidatePageCount()}`,
+    });
     this._updatePickOverlay();
     this.audio.keypress();
   }
@@ -687,6 +738,7 @@ export class TypingGame {
   hideCandidates() {
     const panel = document.getElementById('candidate-panel');
     if (panel) panel.classList.add('hidden');
+    this.mobileUi?.hideCandidates();
     this._candidateList = [];
     this.quickPicking = false;
     this.selectedCandidateIndex = 0;

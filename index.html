@@ -175,12 +175,39 @@
       </button>
     </footer>
 
+    <!-- Mobile-first: docked 2D radical keypad + native IME -->
+    <div id="mobile-ui" class="mobile-ui hidden" aria-hidden="true">
+      <button type="button" class="ime-toggle" id="btn-ime-toggle" aria-pressed="false">
+        切換 原生/虛擬鍵盤
+      </button>
+      <div
+        class="mobile-candidate-strip hidden"
+        id="mobile-candidate-strip"
+        role="listbox"
+        aria-label="速成候選字"
+      ></div>
+      <div class="mobile-keypad" id="mobile-keypad" aria-label="倉頡字根鍵盤"></div>
+      <input
+        id="native-ime-input"
+        class="native-ime-input"
+        type="text"
+        inputmode="text"
+        enterkeyhint="done"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        aria-label="原生輸入法"
+      />
+      <p class="native-ime-hint" id="native-ime-hint">點此區域開啟系統鍵盤（倉頡／速成）</p>
+    </div>
+
     <div class="typed-overlay" id="typed-overlay" aria-live="polite">
       <span class="typed-prompt">輸入</span>
       <span class="typed-buffer" id="typed-buffer">_</span>
     </div>
 
-    <!-- 速成 candidate picker: Windows IME style 1–9 / page / Space=#1 -->
+    <!-- 速成 candidate picker: Windows IME style 1–9 / page / Space=#1 (desktop) -->
     <div class="candidate-panel hidden" id="candidate-panel" role="listbox" aria-label="速成候選字">
       <div class="candidate-panel-header">
         <span>速成候選</span>

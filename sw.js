@@ -1,5 +1,5 @@
 /* Vincy's typing lab — lightweight offline cache */
-const CACHE_VERSION = 'vincys-typing-lab-v4';
+const CACHE_VERSION = 'vincys-typing-lab-v5';
 
 /** Small assets only — large dict JSON is runtime-cached (avoids install hang). */
 const PRECACHE = [
@@ -10,6 +10,7 @@ const PRECACHE = [
   './js/main.js',
   './js/game.js',
   './js/keyboard3d.js',
+  './js/mobileUi.js',
   './js/dictLoader.js',
   './js/fallbackDict.js',
   './js/cangjieData.js',

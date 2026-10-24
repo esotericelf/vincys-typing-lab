@@ -53,6 +53,8 @@ export class VirtualKeyboard {
     this.keys = new Map();
     this.hintLetters = new Set();
     this.visible = true;
+    this._forceHidden = false;
+    this._savedVisible = true;
     this.homeY = 0;
     this.hiddenY = -6.5;
     this.targetGroupY = 0;
@@ -68,6 +70,30 @@ export class VirtualKeyboard {
   setVisible(show) {
     this.visible = !!show;
     this.targetGroupY = this.visible ? this.homeY : this.hiddenY;
+    // Hard-hide frees GPU when mobile 2D keypad replaces the 3D model
+    if (this._forceHidden) {
+      this.group.visible = false;
+      return;
+    }
+    this.group.visible = true;
+  }
+
+  /** Force-disable 3D keyboard (mobile adaptive UI). */
+  setForceHidden(force) {
+    const next = !!force;
+    if (next && !this._forceHidden) {
+      this._savedVisible = this.visible;
+    }
+    this._forceHidden = next;
+    if (this._forceHidden) {
+      this.visible = false;
+      this.targetGroupY = this.hiddenY;
+      this.group.visible = false;
+      this.group.position.y = this.hiddenY;
+    } else {
+      this.group.visible = true;
+      this.setVisible(this._savedVisible !== false);
+    }
   }
 
   toggleVisible() {
@@ -296,6 +322,7 @@ export class VirtualKeyboard {
   }
 
   update(now = performance.now()) {
+    if (this._forceHidden) return;
     this.group.position.y += (this.targetGroupY - this.group.position.y) * 0.12;
 
     this.keys.forEach((key) => {
@@ -311,11 +338,15 @@ export class FloatingScreen {
     this.group = new THREE.Group();
     this.homePos = new THREE.Vector3(0, 3.2, -1.2);
     this.focusPos = new THREE.Vector3(0, 2.4, 0.4);
+    /** Mobile: character panel centered in upper ~45% of the view */
+    this.mobilePos = new THREE.Vector3(0, 3.55, 0.15);
+    this.mobileScale = 1.65;
     this.targetPos = this.homePos.clone();
     this.group.position.copy(this.homePos);
     this.homeScale = 1;
     this.focusScale = 1.35;
     this.targetScale = 1;
+    this.mobileLayout = false;
     this.palette = { ...DEFAULT_SCREEN };
     scene.add(this.group);
 
@@ -360,8 +391,25 @@ export class FloatingScreen {
     this.redraw();
   }
 
+  setMobileLayout(active) {
+    this.mobileLayout = !!active;
+    this._applyLayout();
+  }
+
   setKeyboardVisible(show) {
     this.keyboardVisible = !!show;
+    this._applyLayout();
+  }
+
+  _applyLayout() {
+    if (this.mobileLayout) {
+      // Always focus the character panel in the upper viewport on mobile
+      this.targetPos.copy(this.mobilePos);
+      this.targetScale = this.mobileScale;
+      this.keyboardVisible = false;
+      this.redraw();
+      return;
+    }
     if (this.keyboardVisible) {
       this.targetPos.copy(this.homePos);
       this.targetScale = this.homeScale;
@@ -369,6 +417,7 @@ export class FloatingScreen {
       this.targetPos.copy(this.focusPos);
       this.targetScale = this.focusScale;
     }
+    this.redraw();
   }
 
   setContent({ char, buffer, modeLabel, status, context }) {
@@ -429,7 +478,7 @@ export class FloatingScreen {
       ctx.fillText(this.context, w - 130, 62);
     }
 
-    const fontSize = this.keyboardVisible ? 220 : 280;
+    const fontSize = this.mobileLayout ? 300 : this.keyboardVisible ? 220 : 280;
     ctx.fillStyle = p.char;
     ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
     ctx.textAlign = 'center';

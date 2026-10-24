@@ -1282,6 +1282,11 @@ html[data-theme="light"] .theme-swatch {
     width: min(520px, calc(100% - 0.75rem));
   }
 
+  .btn-keyboard.hidden-on-mobile,
+  #btn-keyboard.hidden-on-mobile {
+    display: none;
+  }
+
   .play-mode-grid {
     grid-template-columns: 1fr;
   }
@@ -1503,4 +1508,312 @@ html[data-theme="light"] .theme-swatch {
 
 .reveal-candidates .candidate-item {
   cursor: default;
+}
+
+/* —— Mobile-first adaptive UI (2D radical keypad) —— */
+.mobile-ui {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  height: 50%;
+  max-height: 52vh;
+  padding: 0.35rem 0.45rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  background: linear-gradient(
+    180deg,
+    transparent 0%,
+    color-mix(in srgb, var(--bg-deep) 72%, transparent) 12%,
+    color-mix(in srgb, var(--bg-panel-solid) 96%, var(--bg-deep)) 28%
+  );
+  pointer-events: none;
+}
+
+.mobile-ui.hidden {
+  display: none;
+}
+
+.mobile-ui > * {
+  pointer-events: auto;
+}
+
+body.is-mobile.mobile-playing .hud-bottom {
+  /* Compact action strip sitting on the keypad zone boundary */
+  bottom: 50%;
+  padding: 0.3rem 0.4rem 0.45rem;
+  background: linear-gradient(0deg, color-mix(in srgb, var(--bg-deep) 85%, transparent), transparent);
+  gap: 0.3rem;
+  z-index: 21;
+}
+
+body.is-mobile.mobile-playing .hud-bottom .action-btn {
+  min-height: 40px;
+  padding: 0.35rem 0.5rem;
+  font-size: 0.68rem;
+}
+
+body.is-mobile.mobile-playing .hud-bottom .action-key {
+  display: none;
+}
+
+body.is-mobile #btn-keyboard {
+  display: none;
+}
+
+body.is-mobile.mobile-playing .typed-overlay {
+  bottom: calc(50% + 2.8rem);
+  z-index: 18;
+}
+
+body.is-mobile .candidate-panel {
+  display: none !important;
+}
+
+body.is-mobile #game-canvas {
+  /* Character panel lives in the upper half; reduce needless touch on 3D */
+  touch-action: none;
+}
+
+.ime-toggle {
+  align-self: center;
+  margin-bottom: 0.35rem;
+  min-height: 40px;
+  padding: 0.4rem 0.85rem;
+  border: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: 0.78rem;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  border-radius: 0;
+}
+
+.ime-toggle[aria-pressed='true'] {
+  border-color: var(--gold);
+  color: var(--gold);
+}
+
+.mobile-keypad {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  flex: 1;
+  justify-content: flex-end;
+  min-height: 0;
+}
+
+body.mobile-native-ime .mobile-keypad,
+body.mobile-native-ime .mobile-candidate-strip {
+  display: none;
+}
+
+.mobile-key-row {
+  display: flex;
+  justify-content: center;
+  gap: 0.28rem;
+}
+
+.mobile-key-row.row-2 {
+  padding: 0 3%;
+}
+
+.mobile-key-row.row-3 {
+  padding: 0 10%;
+}
+
+.mobile-key {
+  flex: 1 1 0;
+  min-width: 0;
+  min-height: 48px;
+  height: clamp(48px, 7.2vh, 64px);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.05rem;
+  padding: 0.15rem 0.1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel-solid) 88%, var(--cyan) 4%);
+  color: var(--text);
+  font-family: var(--font-body);
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: manipulation;
+  transition: background 0.08s ease, border-color 0.08s ease, transform 0.08s ease;
+}
+
+.mobile-key.is-pressed {
+  background: color-mix(in srgb, var(--cyan) 28%, var(--bg-panel-solid));
+  border-color: var(--cyan);
+  transform: scale(0.96);
+}
+
+.mobile-key-radical {
+  font-size: clamp(0.95rem, 3.6vw, 1.2rem);
+  font-weight: 700;
+  line-height: 1.1;
+  color: var(--text);
+}
+
+.mobile-key-letter {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  line-height: 1;
+}
+
+.mobile-key-action {
+  flex-direction: row;
+  font-size: 0.82rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.mobile-key-space {
+  flex: 3.2 1 0;
+  color: var(--cyan);
+  border-color: color-mix(in srgb, var(--cyan) 55%, var(--border));
+}
+
+/* Horizontal candidate strip above keypad (速成) */
+.mobile-candidate-strip {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto 0.35rem;
+  padding: 0.35rem 0.4rem;
+  background: var(--candidate-bg);
+  border: 1px solid var(--border);
+}
+
+.mobile-candidate-strip.hidden {
+  display: none;
+}
+
+.mobile-candidate-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.68rem;
+  color: var(--muted);
+}
+
+.mobile-candidate-meta code {
+  font-family: var(--font-display);
+  color: var(--cyan);
+  letter-spacing: 0.12em;
+}
+
+.mobile-candidate-track {
+  display: flex;
+  gap: 0.35rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  padding-bottom: 0.1rem;
+}
+
+.mobile-candidate-card {
+  flex: 0 0 auto;
+  min-width: 3.4rem;
+  min-height: 48px;
+  padding: 0.35rem 0.55rem;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.1rem;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--bg-panel-solid) 90%, transparent);
+  color: var(--text);
+  cursor: pointer;
+  touch-action: manipulation;
+}
+
+.mobile-candidate-card.is-selected {
+  border-color: var(--gold);
+  background: color-mix(in srgb, var(--gold) 18%, var(--bg-panel-solid));
+}
+
+.mobile-candidate-card.is-target {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--lime) 55%, transparent);
+}
+
+.mobile-candidate-num {
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  color: var(--muted);
+}
+
+.mobile-candidate-card.is-selected .mobile-candidate-num {
+  color: var(--gold);
+}
+
+.mobile-candidate-char {
+  font-size: 1.25rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+/* Native OS IME: invisible input + tap target */
+.native-ime-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  left: 50%;
+  bottom: 30%;
+  caret-color: transparent;
+  color: transparent;
+  background: transparent;
+}
+
+.native-ime-hint {
+  display: none;
+  margin: 0.5rem auto 0.25rem;
+  max-width: 560px;
+  text-align: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+  padding: 1.4rem 1rem;
+  min-height: 7rem;
+  border: 1px dashed var(--border);
+  background: color-mix(in srgb, var(--bg-panel-solid) 70%, transparent);
+  cursor: text;
+}
+
+body.mobile-native-ime .native-ime-hint {
+  display: block;
+}
+
+body.mobile-native-ime .native-ime-input {
+  position: absolute;
+  inset: auto 0.45rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
+  width: auto;
+  height: 7rem;
+  opacity: 0.01;
+  z-index: 2;
+}
+
+@media (max-width: 768px) {
+  body.is-mobile .start-screen {
+    align-items: flex-start;
+    padding-top: 1rem;
+    overflow-y: auto;
+  }
 }
