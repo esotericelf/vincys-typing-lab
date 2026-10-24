@@ -103,8 +103,9 @@
               <p class="settings-title">預設顯示時間</p>
               <select id="reveal-delay-select" aria-label="Default display time">
                 <option value="1000">1.0 秒</option>
-                <option value="1500" selected>1.5 秒</option>
+                <option value="1500">1.5 秒</option>
                 <option value="2000">2.0 秒</option>
+                <option value="2500" selected>2.5 秒</option>
                 <option value="0">僅手動（不自動跳轉）</option>
               </select>
             </div>
@@ -297,13 +298,15 @@
           </div>
         </div>
 
+        <div class="reveal-radicals" id="reveal-radicals" aria-label="字根拆解"></div>
+
         <div class="reveal-candidates" id="reveal-candidates">
           <h3>同碼候選（速成）</h3>
           <div class="candidate-list" id="reveal-candidate-list"></div>
         </div>
 
-        <p class="reveal-hint-note">速成：1–9 直接選字 / Space=#1 · 倉頡：Space 提交</p>
-        <p class="reveal-keys-hint">答題卡：Space 凍結 | N / Enter 下一個</p>
+        <p class="reveal-hint-note">答對後自動顯示 2.5 秒 · Space / Enter 略過</p>
+        <p class="reveal-keys-hint">桌面：Space / Enter 下一字 · F 凍結 · 手機：點擊卡片略過</p>
         <div class="reveal-countdown" id="reveal-countdown" aria-hidden="true">
           <div class="reveal-countdown-fill" id="reveal-countdown-fill"></div>
         </div>

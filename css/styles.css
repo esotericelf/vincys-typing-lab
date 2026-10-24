@@ -857,15 +857,16 @@ html[data-theme="light"] .theme-swatch {
   color: var(--cyan);
 }
 
-/* Reveal modal */
+/* Reveal modal — 拆碼解析視窗 */
 .modal-backdrop {
   position: absolute;
   inset: 0;
-  z-index: 110;
+  z-index: 300;
   display: grid;
   place-items: center;
   background: color-mix(in srgb, var(--bg-deep) 70%, transparent);
-  backdrop-filter: blur(4px);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   padding: 1rem;
 }
 
@@ -876,7 +877,7 @@ html[data-theme="light"] .theme-swatch {
 .reveal-card {
   position: relative;
   width: min(420px, 100%);
-  padding: 1.75rem 1.5rem 1.15rem;
+  padding: 1.75rem 1.5rem 1.35rem;
   overflow: hidden;
   background:
     radial-gradient(ellipse at 20% 0%, color-mix(in srgb, var(--cyan) 18%, transparent), transparent 50%),
@@ -885,6 +886,47 @@ html[data-theme="light"] .theme-swatch {
   box-shadow: var(--shadow-panel), var(--glow-cyan);
   text-align: center;
   animation: cardIn 0.35s ease;
+  cursor: pointer;
+}
+
+.reveal-radicals {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  margin-top: 0.85rem;
+}
+
+.reveal-radical-chip {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.6rem;
+  padding: 0.35rem 0.45rem;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.28);
+  line-height: 1.15;
+}
+
+.reveal-radical-chip strong {
+  font-size: 1.25rem;
+  color: var(--text);
+}
+
+.reveal-radical-chip em {
+  font-style: normal;
+  font-family: var(--font-display);
+  font-size: 0.62rem;
+  color: var(--cyan);
+  letter-spacing: 0.06em;
+}
+
+.reveal-radical-plus {
+  color: var(--muted);
+  font-size: 1rem;
+  padding: 0 0.1rem;
 }
 
 .reveal-card.is-frozen {
@@ -1075,7 +1117,7 @@ html[data-theme="light"] .theme-swatch {
   left: 0;
   right: 0;
   bottom: 0;
-  height: 4px;
+  height: 5px;
   background: rgba(0, 0, 0, 0.45);
   overflow: hidden;
 }
@@ -1905,6 +1947,51 @@ body.is-mobile:not(.mobile-playing) .zone-candidates {
 body.is-mobile:not(.mobile-playing) .zone-guide {
   /* Keep absolute overlay behavior under the start menu */
   inset: 0;
+}
+
+/* Mobile 拆碼視窗: fixed above keypad, never under virtual keys */
+body.is-mobile #reveal-modal.modal-backdrop,
+body.is-mobile.reveal-open #reveal-modal {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 300;
+  padding: 0.65rem 0.65rem calc(min(42vh, 20rem) + 0.75rem);
+  align-items: center;
+  justify-items: center;
+  background: rgba(5, 8, 15, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+body.is-mobile.mobile-playing #reveal-modal.modal-backdrop {
+  /* Keep card in the upper play area above the docked keypad */
+  bottom: min(42vh, 20rem);
+  padding-bottom: 0.75rem;
+}
+
+body.is-mobile .reveal-card {
+  width: min(400px, 100%);
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: 1.25rem 1rem 1.2rem;
+  border-width: 2px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.55), 0 0 24px color-mix(in srgb, var(--cyan) 35%, transparent);
+}
+
+body.is-mobile .reveal-char {
+  font-size: 3.2rem;
+}
+
+body.is-mobile .reveal-candidates {
+  display: none; /* keep success card compact on phones */
+}
+
+body.is-mobile .reveal-keys-hint {
+  font-size: 0.72rem;
 }
 
 .ime-toggle[aria-pressed='true'] {

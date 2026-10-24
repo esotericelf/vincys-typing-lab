@@ -53,8 +53,10 @@ export class TypingGame {
     this._advanceTimer = null;
     this._decompAbort = null;
 
-    /** Reveal auto-advance: base delay from settings; +200ms bump on non-manual */
-    this.revealDelayMs = 1500;
+    /** Reveal auto-advance: settings default; success breakdown uses SUCCESS_BREAKDOWN_MS */
+    this.revealDelayMs = 2500;
+    /** Fixed post-success 拆碼視窗 duration */
+    this.SUCCESS_BREAKDOWN_MS = 2500;
     /** Skip breakdown popup after success (Fast Practice Mode) */
     this.fastPractice = false;
     this.revealOpen = false;
@@ -810,12 +812,12 @@ export class TypingGame {
       return;
     }
 
-    const codeLen = this.target?.cangjieCode?.length || 2;
-    const animMs = 120 + codeLen * 400 + 80;
-    const delay = this.getEffectiveRevealDelay();
+    // Always show 拆碼解析視窗 for 2.5s (unless settings = manual only / 0)
+    const delay =
+      this.revealDelayMs === 0 ? 0 : this.SUCCESS_BREAKDOWN_MS || 2500;
     this.showReveal(false, {
-      autoAdvance: true,
-      durationMs: delay > 0 ? Math.max(animMs, delay) : 0,
+      autoAdvance: delay > 0,
+      durationMs: delay,
     });
   }
 
@@ -844,13 +846,38 @@ export class TypingGame {
     const t = this.target;
     const modal = document.getElementById('reveal-modal');
     document.getElementById('reveal-char').textContent = t.char;
-    document.getElementById('reveal-pinyin').textContent = fromHint ? '拆碼提示' : '輸入完成';
-    document.getElementById('reveal-meaning').textContent =
-      t.meaning || `碼長 ${t.cangjieCode.length} · 難度 ${frequencyFromCode(t.cangjieCode)}`;
+    document.getElementById('reveal-pinyin').textContent = fromHint
+      ? '拆碼提示'
+      : '拆碼解析 · 輸入完成';
+    const meaningBits = [];
+    if (t.pinyin) meaningBits.push(t.pinyin);
+    if (t.meaning) meaningBits.push(t.meaning);
+    meaningBits.push(`碼長 ${t.cangjieCode.length} · 難度 ${frequencyFromCode(t.cangjieCode)}`);
+    document.getElementById('reveal-meaning').textContent = meaningBits.join(' · ');
     document.getElementById('reveal-decomp').textContent = formatDecomposition(t);
     document.getElementById('reveal-cangjie').textContent = t.cangjieCode;
     document.getElementById('reveal-quick').textContent = t.quickCode;
+
+    const radicalRow = document.getElementById('reveal-radicals');
+    if (radicalRow) {
+      radicalRow.innerHTML = '';
+      const letters = [...(t.cangjieCode || '').toUpperCase()];
+      letters.forEach((letter, i) => {
+        if (i) {
+          const plus = document.createElement('span');
+          plus.className = 'reveal-radical-plus';
+          plus.textContent = '+';
+          radicalRow.appendChild(plus);
+        }
+        const chip = document.createElement('span');
+        chip.className = 'reveal-radical-chip';
+        chip.innerHTML = `<strong>${CANGJIE_RADICALS[letter] || '·'}</strong><em>${letter}</em>`;
+        radicalRow.appendChild(chip);
+      });
+    }
+
     modal.classList.remove('hidden');
+    document.body.classList.add('reveal-open');
     this.revealOpen = true;
     this.hideCandidates();
 
@@ -903,6 +930,7 @@ export class TypingGame {
     this.revealFrozen = false;
     this._revealAuto = false;
     this._setFreezeUi(false);
+    document.body.classList.remove('reveal-open');
     const modal = document.getElementById('reveal-modal');
     if (modal) modal.classList.add('hidden');
   }

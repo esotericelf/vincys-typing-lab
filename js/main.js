@@ -488,9 +488,24 @@ document.getElementById('settings-quick')?.addEventListener('click', (e) => {
 
   if (shouldClose) setSettingsOpen(false);
 });
-document.getElementById('reveal-close').addEventListener('click', () => game.hideReveal());
+document.getElementById('reveal-close').addEventListener('click', (e) => {
+  e.stopPropagation();
+  if (game._revealAuto) game.skipRevealToNext();
+  else game.hideReveal();
+});
 document.getElementById('reveal-modal').addEventListener('click', (e) => {
-  if (e.target.id === 'reveal-modal') game.hideReveal();
+  if (e.target.id === 'reveal-modal') {
+    if (game._revealAuto) game.skipRevealToNext();
+    else game.hideReveal();
+  }
+});
+// Mobile: tap the breakdown card to skip the 2.5s timer
+document.querySelector('.reveal-card')?.addEventListener('click', (e) => {
+  if (e.target.closest('.reveal-close')) return;
+  if (!game.isRevealVisible() || !isMobileViewport()) return;
+  e.preventDefault();
+  if (game._revealAuto) game.skipRevealToNext();
+  else game.hideReveal();
 });
 
 const delaySelect = document.getElementById('reveal-delay-select');
@@ -696,7 +711,7 @@ document.getElementById('btn-start-race').addEventListener('click', beginRace);
 
 // —— Hotkeys ——
 // Letter keys always type. UI shortcuts: Esc, Tab, Ctrl+H/N/S/R
-// Reveal modal: Space/F freeze, N/Enter next
+// Reveal modal: Space/Enter/N skip · F freeze
 window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
 
@@ -722,12 +737,12 @@ window.addEventListener('keydown', (e) => {
 
   // Reveal-window controls (before letter typing)
   if (revealOpen) {
-    if (e.key === ' ' || e.key === 'f' || e.key === 'F') {
+    if (e.key === 'f' || e.key === 'F') {
       e.preventDefault();
       game.toggleFreeze();
       return;
     }
-    if (e.key === 'n' || e.key === 'N' || e.key === 'Enter') {
+    if (e.key === ' ' || e.key === 'n' || e.key === 'N' || e.key === 'Enter') {
       e.preventDefault();
       game.skipRevealToNext();
       return;
