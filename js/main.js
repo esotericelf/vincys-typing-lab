@@ -31,27 +31,25 @@ const CAM_DESKTOP_FOCUS = { pos: new THREE.Vector3(0, 4.2, 7.2), look: new THREE
  */
 function computeMobileCam(aspect = 1) {
   const a = Math.max(0.35, Math.min(aspect || 1, 2.5));
-  const portrait = typeof window !== 'undefined' && window.innerHeight > window.innerWidth;
-  // Narrower aspect → higher FOV + larger Z so the 6.5×3.25 plane fits with padding
-  let fov = 40;
-  let z = 8.2;
-  if (a < 0.5) {
-    fov = 54;
-    z = 11.2;
-  } else if (a < 0.62) {
-    fov = 50;
-    z = 10.2;
-  } else if (a < 0.78 || portrait) {
-    fov = 46;
-    z = 9.2;
-  } else {
-    fov = 42;
-    z = 8.4;
+  // Upper-zone canvas is often wide-short; pull back / widen FOV so the panel fits
+  let fov = 42;
+  let z = 8.6;
+  if (a < 0.9) {
+    fov = 48;
+    z = 9.4;
   }
+  if (a < 0.7) {
+    fov = 52;
+    z = 10.2;
+  }
+  if (a < 0.55) {
+    fov = 56;
+    z = 11.0;
+  }
+  // Look straight at the floating panel origin (centered in the clipped stage)
   const lookY = 3.2;
-  const posY = lookY + 0.25;
   return {
-    pos: new THREE.Vector3(0, posY, z),
+    pos: new THREE.Vector3(0, lookY, z),
     look: new THREE.Vector3(0, lookY, 0),
     fov,
   };
@@ -174,62 +172,39 @@ function applyViewportCamera(preserveKeyboardState = true, aspect) {
   camTarget.fov = target.fov;
 }
 
-/** Measure HUD / keypad chrome and publish CSS vars for the character stage. */
+/** Publish app height; flex zones size the canvas — no absolute offset math. */
 function syncMobileLayoutMetrics() {
-  const root = document.documentElement;
   const vv = window.visualViewport;
   const appH = Math.round(vv?.height || window.innerHeight);
-  root.style.setProperty('--app-height', `${appH}px`);
-
-  if (!isMobileViewport()) {
-    root.style.removeProperty('--mobile-header-h');
-    root.style.removeProperty('--mobile-actions-h');
-    root.style.removeProperty('--mobile-keypad-h');
-    return;
-  }
-
-  const header = document.querySelector('.hud-top');
-  const actions = document.querySelector('.hud-bottom');
-  const keypad = document.getElementById('mobile-ui');
-  const playing = document.body.classList.contains('mobile-playing');
-
-  const headerH = header ? Math.ceil(header.getBoundingClientRect().height) : 96;
-  // Keypad uses a fixed CSS height; measure after layout for action/canvas offsets
-  let keypadH = Math.round(appH * 0.44);
-  if (playing && keypad && !keypad.classList.contains('hidden')) {
-    const kh = Math.ceil(keypad.getBoundingClientRect().height);
-    if (kh > 80) keypadH = kh;
-  }
-  const actionsH =
-    playing && actions ? Math.max(44, Math.ceil(actions.getBoundingClientRect().height)) : 0;
-
-  root.style.setProperty('--mobile-header-h', `${headerH}px`);
-  root.style.setProperty('--mobile-actions-h', `${actionsH}px`);
-  root.style.setProperty('--mobile-keypad-h', `${keypadH}px`);
+  document.documentElement.style.setProperty('--app-height', `${appH}px`);
 }
 
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
   const vv = window.visualViewport;
-  document.documentElement.style.setProperty('--app-height', `${Math.round(vv?.height || h)}px`);
-
-  // Layout CSS first so canvas client box reflects the mobile stage
   syncMobileLayoutMetrics();
+
   if (mobileUiRef?.refresh) {
     mobileUiRef.refresh();
-    syncMobileLayoutMetrics();
   }
 
-  // Prefer the canvas element's laid-out size (mobile stage ≠ full window)
-  const cw = Math.max(1, canvas.clientWidth || (vv ? vv.width : w));
-  const ch = Math.max(1, canvas.clientHeight || (vv ? vv.height : h));
+  // Force flex reflow then read the clipped stage (upper zone), not the window
+  const stage = document.getElementById('stage-3d');
+  void stage?.offsetHeight;
+  const box = stage?.getBoundingClientRect?.();
+  const cw = Math.max(1, Math.floor(box?.width || canvas.clientWidth || (vv ? vv.width : w)));
+  const ch = Math.max(1, Math.floor(box?.height || canvas.clientHeight || (vv ? vv.height : h)));
   const aspect = cw / ch;
 
   camera.aspect = aspect;
   applyViewportCamera(true, aspect);
   if (isMobileViewport()) {
     screen.fitMobileStage(aspect);
+    // Keep the floating panel centered in the upper-zone canvas
+    floor.visible = false;
+  } else {
+    floor.visible = true;
   }
   camera.fov = camTarget.fov;
   camera.updateProjectionMatrix();
@@ -237,11 +212,12 @@ function resize() {
   const pr = Math.min(window.devicePixelRatio || 1, isMobileViewport() ? 1.5 : 2);
   renderer.setPixelRatio(pr);
   renderer.setSize(cw, ch, false);
+  renderer.setViewport(0, 0, cw, ch);
 
   // Snap camera toward target on orientation changes (avoid long lerp behind UI)
   if (isMobileViewport() && lookCurrent) {
-    camera.position.lerp(camTarget.pos, 0.85);
-    lookCurrent.lerp(camTarget.look, 0.85);
+    camera.position.copy(camTarget.pos);
+    lookCurrent.copy(camTarget.look);
     camera.lookAt(lookCurrent);
   }
 }

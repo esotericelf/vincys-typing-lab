@@ -20,9 +20,10 @@
 </head>
 <body>
   <div id="app">
-    <canvas id="game-canvas"></canvas>
-
-    <header class="hud-top">
+    <!-- Play layout: 3 zones on mobile (upper / middle / lower); desktop overlays -->
+    <div class="play-layout" id="play-layout">
+      <section class="zone-upper" id="zone-upper">
+        <header class="hud-top">
       <div class="brand">
         <span class="brand-mark">倉</span>
         <div class="brand-text">
@@ -148,63 +149,72 @@
           <span class="race-track-right" id="race-cpm-label">0 CPM</span>
         </div>
       </div>
-    </header>
+      </header>
 
-    <footer class="hud-bottom">
-      <button type="button" class="action-btn" id="btn-hint" title="Ctrl+H">
-        <span class="action-key">⌃H</span>
-        拆字 / Hint
-      </button>
-      <button type="button" class="action-btn" id="btn-next" title="Ctrl+N">
-        <span class="action-key">⌃N</span>
-        下一個
-      </button>
-      <button type="button" class="action-btn" id="btn-sound" title="Ctrl+S">
-        <span class="action-key">⌃S</span>
-        <span id="sound-label">音效 ON</span>
-      </button>
-      <button type="button" class="action-btn" id="btn-keyboard" title="Tab">
-        <span class="action-key">Tab</span>
-        <span id="keyboard-label">隱藏鍵盤</span>
-      </button>
-      <button type="button" class="action-btn" id="btn-restart" title="重置本局成績">
-        重新開始
-      </button>
-      <button type="button" class="action-btn" id="btn-menu" title="返回主選單">
-        返回主選單
-      </button>
-    </footer>
+        <div class="stage-3d" id="stage-3d">
+          <canvas id="game-canvas"></canvas>
+          <div class="typed-overlay" id="typed-overlay" aria-live="polite">
+            <span class="typed-prompt">輸入</span>
+            <span class="typed-buffer" id="typed-buffer">_</span>
+          </div>
+        </div>
+      </section>
 
-    <!-- Mobile-first: docked 2D radical keypad + native IME -->
-    <div id="mobile-ui" class="mobile-ui hidden" aria-hidden="true">
-      <button type="button" class="ime-toggle" id="btn-ime-toggle" aria-pressed="false">
-        切換 原生/虛擬鍵盤
-      </button>
-      <div
-        class="mobile-candidate-strip hidden"
-        id="mobile-candidate-strip"
-        role="listbox"
-        aria-label="速成候選字"
-      ></div>
-      <div class="mobile-keypad" id="mobile-keypad" aria-label="倉頡字根鍵盤"></div>
-      <input
-        id="native-ime-input"
-        class="native-ime-input"
-        type="text"
-        inputmode="text"
-        enterkeyhint="done"
-        autocomplete="off"
-        autocapitalize="off"
-        autocorrect="off"
-        spellcheck="false"
-        aria-label="原生輸入法"
-      />
-      <p class="native-ime-hint" id="native-ime-hint">點此區域開啟系統鍵盤（倉頡／速成）</p>
-    </div>
+      <section class="zone-middle" id="zone-middle">
+        <footer class="hud-bottom">
+          <button type="button" class="action-btn" id="btn-hint" title="Ctrl+H">
+            <span class="action-key">⌃H</span>
+            拆字 / Hint
+          </button>
+          <button type="button" class="action-btn" id="btn-next" title="Ctrl+N">
+            <span class="action-key">⌃N</span>
+            下一個
+          </button>
+          <button type="button" class="action-btn" id="btn-sound" title="Ctrl+S">
+            <span class="action-key">⌃S</span>
+            <span id="sound-label">音效 ON</span>
+          </button>
+          <button type="button" class="action-btn" id="btn-keyboard" title="Tab">
+            <span class="action-key">Tab</span>
+            <span id="keyboard-label">隱藏鍵盤</span>
+          </button>
+          <button type="button" class="action-btn ime-toggle" id="btn-ime-toggle" aria-pressed="false" hidden>
+            切換鍵盤
+          </button>
+          <button type="button" class="action-btn" id="btn-restart" title="重置本局成績">
+            重新開始
+          </button>
+          <button type="button" class="action-btn" id="btn-menu" title="返回主選單">
+            返回主選單
+          </button>
+        </footer>
+      </section>
 
-    <div class="typed-overlay" id="typed-overlay" aria-live="polite">
-      <span class="typed-prompt">輸入</span>
-      <span class="typed-buffer" id="typed-buffer">_</span>
+      <section class="zone-lower" id="zone-lower">
+        <!-- Mobile-first: docked 2D radical keypad + native IME -->
+        <div id="mobile-ui" class="mobile-ui hidden" aria-hidden="true">
+          <div
+            class="mobile-candidate-strip hidden"
+            id="mobile-candidate-strip"
+            role="listbox"
+            aria-label="速成候選字"
+          ></div>
+          <div class="mobile-keypad" id="mobile-keypad" aria-label="倉頡字根鍵盤"></div>
+          <input
+            id="native-ime-input"
+            class="native-ime-input"
+            type="text"
+            inputmode="text"
+            enterkeyhint="done"
+            autocomplete="off"
+            autocapitalize="off"
+            autocorrect="off"
+            spellcheck="false"
+            aria-label="原生輸入法"
+          />
+          <p class="native-ime-hint" id="native-ime-hint">點此區域開啟系統鍵盤（倉頡／速成）</p>
+        </div>
+      </section>
     </div>
 
     <!-- 速成 candidate picker: Windows IME style 1–9 / page / Space=#1 (desktop) -->

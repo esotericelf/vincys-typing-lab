@@ -62,12 +62,59 @@ body {
   overflow: hidden;
 }
 
+/* Desktop: zones are a full-bleed stack; mobile playing uses column flex */
+.play-layout {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  display: block;
+}
+
+.zone-upper {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
+
+.stage-3d {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+}
+
+.zone-middle,
+.zone-lower {
+  position: absolute;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  pointer-events: none;
+}
+
+.zone-middle {
+  bottom: 0;
+}
+
+.zone-lower {
+  bottom: 0;
+  /* Collapsed on desktop — mobile-ui is hidden */
+  height: 0;
+  overflow: visible;
+}
+
+.zone-middle > *,
+.zone-lower > * {
+  pointer-events: auto;
+}
+
 #game-canvas {
   display: block;
   width: 100%;
   height: 100%;
   touch-action: none;
-  position: relative;
+  position: absolute;
+  inset: 0;
   z-index: 0;
   user-select: none;
   -webkit-user-select: none;
@@ -1512,23 +1559,14 @@ html[data-theme="light"] .theme-swatch {
 
 /* —— Mobile-first adaptive UI (2D radical keypad) —— */
 .mobile-ui {
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  z-index: 20;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  height: min(44vh, 22rem);
-  max-height: 52vh;
-  padding: 0.35rem 0.45rem calc(0.35rem + env(safe-area-inset-bottom, 0px));
-  background: linear-gradient(
-    180deg,
-    transparent 0%,
-    color-mix(in srgb, var(--bg-deep) 72%, transparent) 12%,
-    color-mix(in srgb, var(--bg-panel-solid) 96%, var(--bg-deep)) 28%
-  );
+  width: 100%;
+  height: 100%;
+  padding: 0.3rem 0.4rem calc(0.3rem + env(safe-area-inset-bottom, 0px));
+  background: color-mix(in srgb, var(--bg-panel-solid) 96%, var(--bg-deep));
+  border-top: 1px solid var(--border);
   pointer-events: none;
   box-sizing: border-box;
 }
@@ -1542,18 +1580,44 @@ html[data-theme="light"] .theme-swatch {
 }
 
 /*
- * Mobile playing layout (top → bottom):
- *   header stats → character stage (canvas) → action toolbar → 2D keypad
+ * Mobile playing: strict 3-zone column
+ *   Upper (flex 1)  — header + 3D stage
+ *   Middle (auto)   — action toolbar
+ *   Lower (fixed)   — 2D keypad
  */
-body.is-mobile.mobile-playing {
-  --mobile-keypad-h: min(44vh, 22rem);
-  --mobile-actions-h: 3rem;
-  --mobile-header-h: 5.5rem;
+body.is-mobile.mobile-playing .play-layout {
+  display: flex;
+  flex-direction: column;
+  position: absolute;
+  inset: 0;
+  height: 100%;
+  max-height: var(--app-height, 100%);
+  overflow: hidden;
+}
+
+body.is-mobile.mobile-playing .zone-upper {
+  position: relative;
+  inset: auto;
+  flex: 1 1 0;
+  min-height: 0;
+  /* Takes remaining height after middle + lower — typically ~40–50% */
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  z-index: 1;
+  background: var(--bg-deep);
 }
 
 body.is-mobile.mobile-playing .hud-top {
-  padding: 0.45rem 0.55rem 0.35rem;
-  gap: 0.35rem;
+  position: relative;
+  top: auto;
+  left: auto;
+  right: auto;
+  flex: 0 0 auto;
+  padding: 0.4rem 0.5rem 0.3rem;
+  gap: 0.3rem;
+  background: color-mix(in srgb, var(--hud-fade) 95%, transparent);
+  z-index: 2;
 }
 
 body.is-mobile.mobile-playing .hud-top .stats {
@@ -1568,31 +1632,61 @@ body.is-mobile.mobile-playing .hud-top .stat-value {
   font-size: 0.85rem;
 }
 
-body.is-mobile.mobile-playing #game-canvas {
-  /* Stage only: between header and action bar — no 3D under keypad */
-  position: absolute;
-  top: var(--mobile-header-h, 5.5rem);
-  left: 0;
-  right: 0;
-  bottom: calc(var(--mobile-keypad-h, 44vh) + var(--mobile-actions-h, 3rem));
+body.is-mobile.mobile-playing .stage-3d {
+  position: relative;
+  inset: auto;
+  flex: 1 1 0;
+  min-height: 0;
   width: 100%;
-  height: auto;
+  overflow: hidden;
+  isolation: isolate;
+  background: var(--bg-deep);
+}
+
+body.is-mobile.mobile-playing #game-canvas {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
   z-index: 0;
   pointer-events: none;
   touch-action: none;
 }
 
+body.is-mobile.mobile-playing .typed-overlay {
+  position: absolute;
+  left: 50%;
+  bottom: 0.45rem;
+  top: auto;
+  transform: translateX(-50%);
+  z-index: 2;
+  pointer-events: none;
+  padding: 0.3rem 0.7rem;
+}
+
+body.is-mobile.mobile-playing .zone-middle {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  z-index: 10;
+  pointer-events: auto;
+  background: var(--bg-panel-solid);
+  border-top: 1px solid var(--border);
+}
+
 body.is-mobile.mobile-playing .hud-bottom {
-  bottom: var(--mobile-keypad-h, 44vh);
-  left: 0;
-  right: 0;
-  padding: 0.28rem 0.4rem 0.35rem;
-  background: color-mix(in srgb, var(--bg-deep) 92%, transparent);
+  position: relative;
+  bottom: auto;
+  left: auto;
+  right: auto;
+  padding: 0.35rem 0.4rem;
+  background: transparent;
   gap: 0.28rem;
-  z-index: 21;
+  z-index: 10;
   flex-wrap: wrap;
   justify-content: center;
-  max-height: none;
   pointer-events: auto;
 }
 
@@ -1607,20 +1701,29 @@ body.is-mobile.mobile-playing .hud-bottom .action-key {
 }
 
 body.is-mobile #btn-keyboard {
-  display: none;
+  display: none !important;
 }
 
-body.is-mobile.mobile-playing .typed-overlay {
-  top: auto;
-  bottom: calc(var(--mobile-keypad-h, 44vh) + var(--mobile-actions-h, 3rem) + 0.35rem);
-  z-index: 18;
-  pointer-events: none;
-  padding: 0.35rem 0.75rem;
+body.is-mobile.mobile-playing #btn-ime-toggle {
+  display: inline-flex !important;
+}
+
+body.is-mobile.mobile-playing .zone-lower {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  flex: 0 0 auto;
+  height: min(42vh, 20rem);
+  max-height: 46%;
+  z-index: 10;
+  overflow: hidden;
+  pointer-events: auto;
+  background: var(--bg-panel-solid);
 }
 
 body.is-mobile.mobile-playing .mobile-ui {
-  /* Fixed band — JS publishes measured px into --mobile-keypad-h for canvas/actions */
-  height: min(44vh, 22rem);
+  height: 100%;
   max-height: none;
 }
 
@@ -1636,19 +1739,13 @@ body.is-mobile:not(.mobile-playing) #game-canvas {
   pointer-events: none;
 }
 
-.ime-toggle {
-  align-self: center;
-  margin-bottom: 0.35rem;
-  min-height: 40px;
-  padding: 0.4rem 0.85rem;
-  border: 1px solid var(--border);
-  background: var(--bg-panel);
-  color: var(--text);
-  font-family: var(--font-body);
-  font-size: 0.78rem;
-  letter-spacing: 0.02em;
-  cursor: pointer;
-  border-radius: 0;
+/* On mobile menu: keep full-bleed stage under start screen */
+body.is-mobile:not(.mobile-playing) .play-layout {
+  display: block;
+}
+
+body.is-mobile:not(.mobile-playing) .zone-lower {
+  height: 0;
 }
 
 .ime-toggle[aria-pressed='true'] {
