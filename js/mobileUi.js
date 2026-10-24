@@ -46,6 +46,7 @@ export class MobileUi {
     this.imeToggle = document.getElementById('btn-ime-toggle');
     this.nativeInput = document.getElementById('native-ime-input');
     this.candidateStrip = document.getElementById('mobile-candidate-strip');
+    this.candidateZone = document.getElementById('zone-candidates');
 
     this._buildKeypad();
     this._bind();
@@ -289,15 +290,29 @@ export class MobileUi {
    * Mirror desktop candidate panel into the mobile strip (1-tap cards).
    * @param {{ items: Array<{char:string}>, selectedIndex: number, code: string, pageLabel: string } | null} state
    */
+  _setCandidateZoneVisible(show) {
+    if (this.candidateZone) {
+      this.candidateZone.classList.toggle('is-empty', !show);
+      this.candidateZone.setAttribute('aria-hidden', show ? 'false' : 'true');
+    }
+    if (this.candidateStrip) {
+      this.candidateStrip.classList.toggle('hidden', !show);
+      if (!show) this.candidateStrip.innerHTML = '';
+    }
+    // Reflow flex column so the 3D stage resizes around the candidate slot
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new Event('resize'));
+    });
+  }
+
   renderCandidates(state) {
     if (!this.candidateStrip) return;
     if (!this.mobile || !state || !state.items?.length) {
-      this.candidateStrip.classList.add('hidden');
-      this.candidateStrip.innerHTML = '';
+      this._setCandidateZoneVisible(false);
       return;
     }
 
-    this.candidateStrip.classList.remove('hidden');
+    this._setCandidateZoneVisible(true);
     this.candidateStrip.innerHTML = '';
 
     const meta = document.createElement('div');
@@ -321,8 +336,6 @@ export class MobileUi {
   }
 
   hideCandidates() {
-    if (!this.candidateStrip) return;
-    this.candidateStrip.classList.add('hidden');
-    this.candidateStrip.innerHTML = '';
+    this._setCandidateZoneVisible(false);
   }
 }

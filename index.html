@@ -216,15 +216,23 @@
         </footer>
       </section>
 
-      <section class="zone-lower" id="zone-lower">
+      <!-- Mobile: 速成 candidate bar — own flex slot above the keypad -->
+      <section
+        class="zone-candidates candidate-bar-container is-empty"
+        id="zone-candidates"
+        aria-hidden="true"
+      >
+        <div
+          class="mobile-candidate-strip hidden"
+          id="mobile-candidate-strip"
+          role="listbox"
+          aria-label="速成候選字"
+        ></div>
+      </section>
+
+      <section class="zone-lower mobile-keypad-container" id="zone-lower">
         <!-- Mobile-first: docked 2D radical keypad + native IME -->
         <div id="mobile-ui" class="mobile-ui hidden" aria-hidden="true">
-          <div
-            class="mobile-candidate-strip hidden"
-            id="mobile-candidate-strip"
-            role="listbox"
-            aria-label="速成候選字"
-          ></div>
           <div class="mobile-keypad" id="mobile-keypad" aria-label="倉頡字根鍵盤"></div>
           <input
             id="native-ime-input"

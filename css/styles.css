@@ -84,7 +84,8 @@ body {
 }
 
 .zone-middle,
-.zone-lower {
+.zone-lower,
+.zone-candidates {
   position: absolute;
   left: 0;
   right: 0;
@@ -103,8 +104,16 @@ body {
   overflow: visible;
 }
 
+/* Desktop: candidate zone unused (desktop uses #candidate-panel) */
+.zone-candidates {
+  bottom: 0;
+  height: 0;
+  overflow: visible;
+}
+
 .zone-middle > *,
-.zone-lower > * {
+.zone-lower > *,
+.zone-candidates > * {
   pointer-events: auto;
 }
 
@@ -1621,10 +1630,10 @@ html[data-theme="light"] .theme-swatch {
 }
 
 /*
- * Mobile playing: strict 3-zone column
- *   Upper (flex 1)  — header + 3D stage
- *   Middle (auto)   — action toolbar
- *   Lower (fixed)   — 2D keypad
+ * Mobile playing: strict flex column (100vh / --app-height)
+ *   Upper (flex: 1)       — header + 3D stage
+ *   Candidates (shrink 0) — 速成 bar above keys
+ *   Lower (shrink 0)      — 2D keypad
  */
 body.is-mobile.mobile-playing .play-layout {
   display: flex;
@@ -1632,7 +1641,8 @@ body.is-mobile.mobile-playing .play-layout {
   position: absolute;
   inset: 0;
   height: 100%;
-  max-height: var(--app-height, 100%);
+  height: var(--app-height, 100vh);
+  max-height: var(--app-height, 100vh);
   overflow: hidden;
 }
 
@@ -1641,7 +1651,6 @@ body.is-mobile.mobile-playing .zone-upper {
   inset: auto;
   flex: 1 1 0;
   min-height: 0;
-  /* Takes remaining height after middle + lower — typically ~40–50% */
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1705,7 +1714,7 @@ body.is-mobile.mobile-playing .typed-overlay {
   padding: 0.3rem 0.7rem;
 }
 
-/* Middle toolbar hidden on mobile — actions live in 選項 */
+/* Desktop toolbar hidden on mobile — actions live in 選項 */
 body.is-mobile .zone-middle,
 body.is-mobile.mobile-playing .zone-middle {
   display: none !important;
@@ -1715,16 +1724,41 @@ body.is-mobile #btn-keyboard {
   display: none !important;
 }
 
-body.is-mobile.mobile-playing .zone-lower {
+/* 速成 candidate bar — flex slot ABOVE keypad (never absolute over keys) */
+body.is-mobile.mobile-playing .zone-candidates.candidate-bar-container {
+  position: relative;
+  left: auto;
+  right: auto;
+  bottom: auto;
+  height: auto;
+  flex: 0 0 auto;
+  flex-shrink: 0;
+  z-index: 100;
+  overflow: visible;
+  pointer-events: auto;
+  margin-bottom: 4px;
+  background: transparent;
+}
+
+body.is-mobile.mobile-playing .zone-candidates.is-empty {
+  margin-bottom: 0;
+  min-height: 0;
+  height: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+body.is-mobile.mobile-playing .mobile-keypad-container.zone-lower {
   position: relative;
   left: auto;
   right: auto;
   bottom: auto;
   flex: 0 0 auto;
-  height: min(44vh, 21rem);
-  max-height: 48%;
-  z-index: 10;
-  overflow: hidden;
+  flex-shrink: 0;
+  height: min(42vh, 20rem);
+  max-height: 46%;
+  z-index: 90;
+  overflow: visible;
   pointer-events: auto;
   background: var(--bg-panel-solid);
 }
@@ -1765,8 +1799,10 @@ body.is-mobile:not(.mobile-playing) .play-layout {
   display: block;
 }
 
-body.is-mobile:not(.mobile-playing) .zone-lower {
+body.is-mobile:not(.mobile-playing) .zone-lower,
+body.is-mobile:not(.mobile-playing) .zone-candidates {
   height: 0;
+  overflow: hidden;
 }
 
 .ime-toggle[aria-pressed='true'] {
@@ -1786,9 +1822,12 @@ body.is-mobile:not(.mobile-playing) .zone-lower {
   min-height: 0;
 }
 
-body.mobile-native-ime .mobile-keypad,
-body.mobile-native-ime .mobile-candidate-strip {
+body.mobile-native-ime .mobile-keypad {
   display: none;
+}
+
+body.mobile-native-ime .zone-candidates {
+  display: none !important;
 }
 
 .mobile-key-row {
@@ -1868,15 +1907,26 @@ body.mobile-native-ime .mobile-candidate-strip {
   flex-direction: column;
   gap: 0.3rem;
   width: 100%;
-  max-width: 560px;
-  margin: 0 auto 0.35rem;
-  padding: 0.35rem 0.4rem;
-  background: var(--candidate-bg);
-  border: 1px solid var(--border);
+  max-width: none;
+  margin: 0;
+  padding: 0.4rem 0.5rem;
+  background: #0d1117;
+  border: 1px solid #00f0ff;
+  border-left: none;
+  border-right: none;
+  box-shadow: 0 -4px 18px rgba(0, 0, 0, 0.45);
+  position: relative;
+  z-index: 100;
+  pointer-events: auto;
+  overflow: visible;
 }
 
 .mobile-candidate-strip.hidden {
   display: none;
+}
+
+body.is-mobile.mobile-playing .mobile-candidate-strip:not(.hidden) {
+  display: flex;
 }
 
 .mobile-candidate-meta {
@@ -1912,9 +1962,9 @@ body.mobile-native-ime .mobile-candidate-strip {
   align-items: center;
   justify-content: center;
   gap: 0.1rem;
-  border: 1px solid var(--border);
-  background: color-mix(in srgb, var(--bg-panel-solid) 90%, transparent);
-  color: var(--text);
+  border: 1px solid rgba(0, 240, 255, 0.35);
+  background: #161b22;
+  color: #e6edf3;
   cursor: pointer;
   touch-action: manipulation;
 }
