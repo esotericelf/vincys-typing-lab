@@ -638,8 +638,9 @@ function showAnalytics(metrics, seqLen) {
   document.getElementById('an-avg').textContent = String(metrics.avgKeyLen);
   document.getElementById('an-diff').textContent = metrics.difficulty;
   const note = document.getElementById('race-ready-note');
+  const sentences = metrics?.sentenceCount || game.raceSentences?.length || 0;
   note.textContent = seqLen
-    ? `可競速 ${seqLen} 字（字典可編碼）· ${metrics.title || ''}`
+    ? `可競速 ${seqLen} 字 · ${sentences} 句（字典可編碼）· ${metrics.title || ''}`
     : '文章中沒有可編碼的漢字';
   raceLoaded = seqLen > 0;
   document.getElementById('btn-start-race').disabled = !raceLoaded || !dictReady;

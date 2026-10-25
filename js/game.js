@@ -1,7 +1,7 @@
 import { CANGJIE_RADICALS, formatDecomposition, getRequiredCode } from './cangjieData.js';
 import {
   charEntry,
-  extractTypeableSequence,
+  extractRaceSentences,
   analyzeText,
   loadPracticeChars,
   frequencyFromCode,
@@ -35,6 +35,10 @@ export class TypingGame {
     /** Race state */
     this.raceText = '';
     this.raceSeq = [];
+    /** @type {Array<{ text: string, chars: object[] }>} */
+    this.raceSentences = [];
+    this.raceSentenceIndex = 0;
+    this.raceCharInSentence = 0;
     this.raceIndex = 0;
     this.raceMetrics = null;
     this.raceLimitSec = 0; // 0 = no hard limit
@@ -247,12 +251,14 @@ export class TypingGame {
     this._charStartedAt = performance.now();
 
     if (this.playMode === 'race') {
-      if (!this.raceSeq.length) {
+      if (!this.raceSentences.length || !this.raceSeq.length) {
         this.running = false;
         return false;
       }
+      this.raceSentenceIndex = 0;
+      this.raceCharInSentence = 0;
       this.raceIndex = 0;
-      this.target = this.raceSeq[0];
+      this.target = this.raceSentences[0].chars[0];
       this.buffer = '';
       this.keyboard.clearHints();
       this._syncScreen('idle');
@@ -296,14 +302,33 @@ export class TypingGame {
 
   loadRaceText(text, title = '自訂文章') {
     this.raceText = text || '';
-    this.raceSeq = extractTypeableSequence(this.raceText);
+    this.raceSentences = extractRaceSentences(this.raceText);
+    this.raceSeq = this.raceSentences.flatMap((s) => s.chars);
     this.raceMetrics = analyzeText(this.raceText);
     this.raceMetrics.title = title;
+    this.raceMetrics.sentenceCount = this.raceSentences.length;
     this.raceIndex = 0;
+    this.raceSentenceIndex = 0;
+    this.raceCharInSentence = 0;
     this.raceEnded = false;
     return {
       sequenceLength: this.raceSeq.length,
+      sentenceCount: this.raceSentences.length,
       metrics: this.raceMetrics,
+    };
+  }
+
+  /** Current sentence view for the 3D panel (race mode). */
+  getRaceSentenceView() {
+    if (this.playMode !== 'race' || !this.raceSentences.length) return null;
+    const sent = this.raceSentences[this.raceSentenceIndex];
+    if (!sent) return null;
+    return {
+      text: sent.text,
+      charIndex: this.raceCharInSentence,
+      chars: sent.chars,
+      sentenceIndex: this.raceSentenceIndex,
+      sentenceCount: this.raceSentences.length,
     };
   }
 
@@ -340,12 +365,28 @@ export class TypingGame {
   _advanceRace() {
     this.hideReveal();
     this.hideCandidates();
-    this.raceIndex += 1;
-    if (this.raceIndex >= this.raceSeq.length) {
+
+    const sent = this.raceSentences[this.raceSentenceIndex];
+    if (!sent) {
       this._finishRace(true);
       return;
     }
-    this.target = this.raceSeq[this.raceIndex];
+
+    this.raceCharInSentence += 1;
+    this.raceIndex += 1;
+
+    // End of current sentence → next sentence
+    if (this.raceCharInSentence >= sent.chars.length) {
+      this.raceSentenceIndex += 1;
+      this.raceCharInSentence = 0;
+      if (this.raceSentenceIndex >= this.raceSentences.length) {
+        this._finishRace(true);
+        return;
+      }
+    }
+
+    const nextSent = this.raceSentences[this.raceSentenceIndex];
+    this.target = nextSent.chars[this.raceCharInSentence];
     this.buffer = '';
     this._charStartedAt = performance.now();
     this.keyboard.clearHints();
@@ -783,21 +824,7 @@ export class TypingGame {
     this._syncScreen('ok');
     this._flashDom('ok');
 
-    if (this.playMode === 'race') {
-      this._emitRace();
-      const code = [...(this.target?.cangjieCode || '')];
-      code.forEach((letter, i) => {
-        setTimeout(() => this.keyboard.pulseKey(letter, 320), i * 180);
-      });
-      if (this._advanceTimer) clearTimeout(this._advanceTimer);
-      const wait = this.fastPractice
-        ? 120
-        : Math.max(320, code.length * 180 + 200);
-      this._advanceTimer = setTimeout(() => {
-        if (this.running) this._advanceRace();
-      }, wait);
-      return;
-    }
+    if (this.playMode === 'race') this._emitRace();
 
     // Fast Practice: skip breakdown popup, keep flash/audio, go next
     if (this.fastPractice) {
@@ -812,7 +839,7 @@ export class TypingGame {
       return;
     }
 
-    // Always show 拆碼解析視窗 for 2.5s (unless settings = manual only / 0)
+    // 拆碼解析視窗 2.5s (drill + race), then next char / next sentence
     const delay =
       this.revealDelayMs === 0 ? 0 : this.SUCCESS_BREAKDOWN_MS || 2500;
     this.showReveal(false, {
@@ -912,6 +939,7 @@ export class TypingGame {
           modeLabel: this.mode === 'quick' ? '速成' : '倉頡',
           status: 'idle',
           context: step.label,
+          sentence: this.getRaceSentenceView(),
         });
       },
     }).then(() => {
@@ -941,8 +969,10 @@ export class TypingGame {
 
   _syncScreen(status) {
     const mobile = this._isMobileUi();
-    const raceCtx =
-      this.playMode === 'race' && this.raceSeq.length
+    const sentenceView = this.getRaceSentenceView();
+    const raceCtx = sentenceView
+      ? `句 ${sentenceView.sentenceIndex + 1}/${sentenceView.sentenceCount}`
+      : this.playMode === 'race' && this.raceSeq.length
         ? `${this.raceIndex + 1}/${this.raceSeq.length}`
         : null;
 
@@ -952,8 +982,10 @@ export class TypingGame {
       if (status === 'await-space') context = 'Press [Space] to submit';
       if (status === 'pick' || this.quickPicking) context = 'Press [1-9] or [Space]';
       if (status === 'typing' && this.buffer) context = '繼續輸入…';
+      if (sentenceView && status !== 'await-space' && status !== 'pick') {
+        context = raceCtx;
+      }
     } else {
-      // Race progress only on the 3D badge; tips stay in the HTML guide banner
       context = raceCtx || '';
     }
 
@@ -963,6 +995,7 @@ export class TypingGame {
       modeLabel: this.mode === 'quick' ? '速成' : '倉頡',
       status: status === 'err' ? 'err' : status === 'ok' ? 'ok' : 'idle',
       context,
+      sentence: sentenceView,
     });
 
     const bufEl = document.getElementById('typed-buffer');

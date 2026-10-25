@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { CANGJIE_RADICALS } from './cangjieData.js';
 import { THEMES } from './themeManager.js';
+import { isCjkChar, lookupCode } from './dictLoader.js';
 
 const ROW_LAYOUT = [
   ['Q', 'W', 'E', 'R', 'T', 'Y', 'U', 'I', 'O', 'P'],
@@ -381,6 +382,8 @@ export class FloatingScreen {
     this.modeLabel = '速成';
     this.status = 'idle';
     this.context = '';
+    /** @type {{ text: string, charIndex: number, chars: { char: string }[] } | null} */
+    this.sentence = null;
     this.keyboardVisible = true;
     this.redraw();
   }
@@ -449,13 +452,127 @@ export class FloatingScreen {
     return size;
   }
 
-  setContent({ char, buffer, modeLabel, status, context }) {
+  setContent({ char, buffer, modeLabel, status, context, sentence }) {
     if (char !== undefined) this.targetChar = char;
     if (buffer !== undefined) this.buffer = buffer;
     if (modeLabel !== undefined) this.modeLabel = modeLabel;
     if (status !== undefined) this.status = status;
     if (context !== undefined) this.context = context || '';
+    if (sentence !== undefined) this.sentence = sentence || null;
     this.redraw();
+  }
+
+  /**
+   * Build per-glyph highlight states for a race sentence.
+   * done = typed · current = active target · todo = upcoming · punct = non-typeable
+   */
+  _sentenceUnits(sentence) {
+    if (!sentence?.text) return [];
+    const units = [];
+    let ti = 0;
+    const chars = sentence.chars || [];
+    const cur = sentence.charIndex ?? 0;
+    for (const ch of sentence.text) {
+      const typeable = isCjkChar(ch) && lookupCode(ch);
+      if (typeable && ti < chars.length && chars[ti].char === ch) {
+        let state = 'todo';
+        if (ti < cur) state = 'done';
+        else if (ti === cur) state = 'current';
+        units.push({ ch, state });
+        ti += 1;
+      } else if (typeable) {
+        // Rare mismatch — still treat as typeable sequence if possible
+        let state = 'todo';
+        if (ti < cur) state = 'done';
+        else if (ti === cur) state = 'current';
+        units.push({ ch, state });
+        if (ti < chars.length) ti += 1;
+      } else {
+        units.push({ ch, state: 'punct' });
+      }
+    }
+    return units;
+  }
+
+  _wrapSentenceLines(ctx, units, maxWidth, fontSize) {
+    ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+    const lines = [];
+    let line = [];
+    let lineW = 0;
+    for (const u of units) {
+      const cw = ctx.measureText(u.ch).width;
+      if (line.length && lineW + cw > maxWidth) {
+        lines.push(line);
+        line = [];
+        lineW = 0;
+      }
+      line.push({ ...u, w: cw });
+      lineW += cw;
+    }
+    if (line.length) lines.push(line);
+    return lines;
+  }
+
+  _drawSentence(ctx, p, w, h) {
+    const units = this._sentenceUnits(this.sentence);
+    if (!units.length) return;
+
+    const padX = this.mobileLayout ? 48 : 56;
+    const maxWidth = w - padX * 2;
+    const topY = 110;
+    const bottomY = h * 0.78;
+    const maxH = bottomY - topY;
+
+    let fontSize = this.mobileLayout ? 42 : 52;
+    let lines = this._wrapSentenceLines(ctx, units, maxWidth, fontSize);
+    let lineH = fontSize * 1.35;
+    while (fontSize > 22 && (lines.length * lineH > maxH || lines.some((ln) => {
+      const tw = ln.reduce((s, u) => s + u.w, 0);
+      return tw > maxWidth + 1;
+    }))) {
+      fontSize -= 2;
+      lines = this._wrapSentenceLines(ctx, units, maxWidth, fontSize);
+      lineH = fontSize * 1.35;
+    }
+
+    const blockH = lines.length * lineH;
+    let y = topY + Math.max(0, (maxH - blockH) / 2) + fontSize * 0.75;
+
+    const colors = {
+      done: p.contextFg || '#7a8fa8',
+      current: p.char || '#00e5ff',
+      todo: p.char || '#e8f4ff',
+      punct: p.modeFg || '#9eb4cc',
+    };
+    // Dim completed / upcoming for contrast
+    const fillFor = (state) => {
+      if (state === 'done') return 'rgba(122, 143, 168, 0.55)';
+      if (state === 'current') return colors.current;
+      if (state === 'punct') return 'rgba(158, 180, 204, 0.75)';
+      return 'rgba(232, 244, 255, 0.88)';
+    };
+
+    ctx.textAlign = 'left';
+    ctx.textBaseline = 'middle';
+    ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+
+    for (const line of lines) {
+      const tw = line.reduce((s, u) => s + u.w, 0);
+      let x = (w - tw) / 2;
+      for (const u of line) {
+        ctx.fillStyle = fillFor(u.state);
+        if (u.state === 'current') {
+          ctx.shadowColor = p.charGlow || 'rgba(0, 229, 255, 0.7)';
+          ctx.shadowBlur = this.mobileLayout ? 14 : 22;
+        } else {
+          ctx.shadowBlur = 0;
+        }
+        ctx.fillText(u.ch, x, y);
+        x += u.w;
+      }
+      ctx.shadowBlur = 0;
+      y += lineH;
+    }
   }
 
   redraw() {
@@ -501,24 +618,30 @@ export class FloatingScreen {
 
     if (this.context) {
       ctx.fillStyle = p.contextBg;
-      ctx.fillRect(w - 220, 40, 180, 44);
+      const label = String(this.context);
+      const boxW = Math.min(220, 24 + label.length * 14);
+      ctx.fillRect(w - boxW - 40, 40, boxW, 44);
       ctx.fillStyle = p.contextFg;
-      ctx.font = '600 20px Orbitron, sans-serif';
-      ctx.fillText(this.context, w - 130, 62);
+      ctx.font = '600 18px Orbitron, sans-serif';
+      ctx.fillText(label, w - boxW / 2 - 40, 62);
     }
 
-    const prefer = this.mobileLayout ? 188 : this.keyboardVisible ? 220 : 280;
-    const maxW = this.mobileLayout ? w * 0.52 : w * 0.62;
-    const maxH = this.mobileLayout ? h * 0.42 : h * 0.5;
-    const fontSize = this._fitCharFontSize(ctx, this.targetChar, maxW, maxH, prefer);
-    ctx.fillStyle = p.char;
-    ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.shadowColor = p.charGlow;
-    ctx.shadowBlur = this.mobileLayout ? 16 : 28;
-    ctx.fillText(this.targetChar || '—', w / 2, h * (this.mobileLayout ? 0.5 : 0.48));
-    ctx.shadowBlur = 0;
+    if (this.sentence?.text) {
+      this._drawSentence(ctx, p, w, h);
+    } else {
+      const prefer = this.mobileLayout ? 188 : this.keyboardVisible ? 220 : 280;
+      const maxW = this.mobileLayout ? w * 0.52 : w * 0.62;
+      const maxH = this.mobileLayout ? h * 0.42 : h * 0.5;
+      const fontSize = this._fitCharFontSize(ctx, this.targetChar, maxW, maxH, prefer);
+      ctx.fillStyle = p.char;
+      ctx.font = `bold ${fontSize}px "Noto Sans TC", "Microsoft JhengHei", sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = p.charGlow;
+      ctx.shadowBlur = this.mobileLayout ? 16 : 28;
+      ctx.fillText(this.targetChar || '—', w / 2, h * (this.mobileLayout ? 0.5 : 0.48));
+      ctx.shadowBlur = 0;
+    }
 
     let bufColor = p.idle;
     if (this.status === 'ok') bufColor = p.ok;
@@ -526,6 +649,8 @@ export class FloatingScreen {
     ctx.fillStyle = bufColor;
     const bufSize = this.mobileLayout ? 36 : 48;
     ctx.font = `600 ${bufSize}px Orbitron, sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
     ctx.fillText((this.buffer || '·').replace(/_/g, '·'), w / 2, h * 0.82);
 
     this.texture.needsUpdate = true;

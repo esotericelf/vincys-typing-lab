@@ -360,6 +360,47 @@ export function extractTypeableSequence(text) {
   return seq;
 }
 
+/** Sentence / clause delimiters for 文章競速 display. */
+const SENTENCE_DELIMS = /[。！？；\n]/;
+
+/**
+ * Split article text into sentences; each keeps display text + typeable char entries.
+ * Delimiters 。！？； and newlines end a clause.
+ * @returns {Array<{ text: string, chars: ReturnType<typeof charEntry>[] }>}
+ */
+export function extractRaceSentences(text) {
+  const raw = String(text || '').replace(/\r\n/g, '\n').replace(/\r/g, '\n');
+  const sentences = [];
+  let buf = '';
+
+  const flush = () => {
+    const trimmed = buf.replace(/^[ \t\u3000]+|[ \t\u3000]+$/g, '').replace(/\n+/g, '');
+    buf = '';
+    if (!trimmed) return;
+    const chars = extractTypeableSequence(trimmed);
+    if (!chars.length) return;
+    sentences.push({ text: trimmed, chars });
+  };
+
+  for (const ch of raw) {
+    buf += ch;
+    if (SENTENCE_DELIMS.test(ch)) flush();
+  }
+  flush();
+
+  // Fallback: whole text as one sentence if no delimiters yielded typeable clauses
+  if (!sentences.length) {
+    const chars = extractTypeableSequence(raw);
+    if (chars.length) {
+      sentences.push({
+        text: raw.replace(/\s+/g, '').slice(0, 80) || chars.map((c) => c.char).join(''),
+        chars,
+      });
+    }
+  }
+  return sentences;
+}
+
 export async function loadPracticeChars() {
   try {
     const data = await fetchJson('./dict/practice_chars.json', { timeoutMs: 2000 });
