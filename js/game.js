@@ -13,12 +13,20 @@ import { GameAudio } from './audio.js';
 
 const VALID_KEYS = new Set(Object.keys(CANGJIE_RADICALS));
 
+function formatRaceClockStatic(sec) {
+  const s = Math.max(0, Math.floor(Number(sec) || 0));
+  const m = Math.floor(s / 60);
+  const r = String(s % 60).padStart(2, '0');
+  return `${m}:${r}`;
+}
+
 export class TypingGame {
-  constructor({ keyboard, screen, onHudUpdate, onRaceUpdate, mobileUi = null }) {
+  constructor({ keyboard, screen, onHudUpdate, onRaceUpdate, onRaceComplete = null, mobileUi = null }) {
     this.keyboard = keyboard;
     this.screen = screen;
     this.onHudUpdate = onHudUpdate;
     this.onRaceUpdate = onRaceUpdate;
+    this.onRaceComplete = onRaceComplete;
     this.mobileUi = mobileUi;
     this.audio = new GameAudio();
 
@@ -383,12 +391,25 @@ export class TypingGame {
     this._tickHud();
   }
 
+  /** True when the current target is the last typeable char of the passage. */
+  isLastRaceCharacter() {
+    if (this.playMode !== 'race' || !this.raceSentences.length) return false;
+    const si = this.raceSentenceIndex;
+    const ci = this.raceCharInSentence;
+    if (si < 0 || si >= this.raceSentences.length) return true;
+    const sent = this.raceSentences[si];
+    if (!sent?.chars?.length) return si >= this.raceSentences.length - 1;
+    return si >= this.raceSentences.length - 1 && ci >= sent.chars.length - 1;
+  }
+
   _advanceRace() {
     this.hideReveal();
     this.hideCandidates();
 
+    if (this.raceEnded) return;
+
     const sent = this.raceSentences[this.raceSentenceIndex];
-    if (!sent) {
+    if (!sent?.chars?.length) {
       this._finishRace(true);
       return;
     }
@@ -406,9 +427,17 @@ export class TypingGame {
       }
     }
 
-    const nextSent = this.raceSentences[this.raceSentenceIndex];
-    this.target = nextSent.chars[this.raceCharInSentence];
+    const nextTarget =
+      this.raceSentences[this.raceSentenceIndex]?.chars?.[this.raceCharInSentence];
+    if (!nextTarget) {
+      // Guard: never assign undefined target (locks input / OOB)
+      this._finishRace(true);
+      return;
+    }
+
+    this.target = nextTarget;
     this.buffer = '';
+    this.quickPicking = false;
     this._charStartedAt = performance.now();
     this.keyboard.clearHints();
     this._syncScreen('idle');
@@ -416,13 +445,49 @@ export class TypingGame {
     this._tickHud();
   }
 
+  getRaceSummary(completed) {
+    const elapsedMs = Math.max(0, performance.now() - (this.startedAt || performance.now()));
+    const elapsedSec = elapsedMs / 1000;
+    const total = this.raceSeq.length || 0;
+    const done = Math.min(this.stats.completed, total);
+    return {
+      completed: !!completed,
+      title: this.raceMetrics?.title || '文章競速',
+      totalChars: total,
+      typedChars: done,
+      elapsedSec,
+      elapsedLabel: formatRaceClockStatic(elapsedSec),
+      cpm: this.getCpm(),
+      wpm: this.getWpm(),
+      accuracy: this.getAccuracy(),
+      streakBest: this.stats.bestStreak,
+      raceLimitSec: this.raceLimitSec,
+    };
+  }
+
   _finishRace(completed) {
+    if (this.raceEnded) return;
     this.raceEnded = true;
     this.running = false;
     this.stopTimer();
-    this.audio.success();
-    this._emitRace({ finished: true, completed });
+    this.hideCandidates();
+    this.hideReveal();
+    this.quickPicking = false;
+    if (this._advanceTimer) {
+      clearTimeout(this._advanceTimer);
+      this._advanceTimer = null;
+    }
+    this.audio.finish();
+    const summary = this.getRaceSummary(completed);
+    this._emitRace({ finished: true, completed: !!completed, summary });
     this._tickHud();
+    if (typeof this.onRaceComplete === 'function') {
+      try {
+        this.onRaceComplete(summary);
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   _checkRaceTime() {
@@ -480,6 +545,11 @@ export class TypingGame {
     if (!VALID_KEYS.has(L)) return;
 
     const required = this.getRequired();
+    // Empty code = invalid target; skip forward in race instead of locking input
+    if (!required) {
+      if (this.playMode === 'race') this._advanceRace();
+      return;
+    }
     // Don't accept more keys once sequence is complete — wait for Space
     if (this.buffer.length >= required.length) {
       this._syncScreen('await-space');
@@ -757,7 +827,8 @@ export class TypingGame {
    * Number key 1–9: immediately select & submit that candidate (速成).
    */
   commitPageCandidate(pageIndex) {
-    if (!this.quickPicking || this.revealOpen) return false;
+    if (this.raceEnded || this.revealOpen) return false;
+    if (!this.quickPicking) return false;
     const pageItems = this.getPageCandidates();
     const entry = pageItems[pageIndex];
     if (!entry) return false;
@@ -841,11 +912,26 @@ export class TypingGame {
     this.stats.streak += 1;
     this.stats.bestStreak = Math.max(this.stats.bestStreak, this.stats.streak);
 
+    const raceFinished = this.playMode === 'race' && this.isLastRaceCharacter();
+
     this.audio.success();
     this._syncScreen('ok');
     this._flashDom('ok');
 
     if (this.playMode === 'race') this._emitRace();
+
+    // Passage complete — stop immediately (no OOB next-char advance)
+    if (raceFinished) {
+      if (this._advanceTimer) {
+        clearTimeout(this._advanceTimer);
+        this._advanceTimer = null;
+      }
+      // Brief beat so the last glyph flash / candidate tap can settle
+      this._advanceTimer = setTimeout(() => {
+        this._finishRace(true);
+      }, 80);
+      return;
+    }
 
     // Fast Practice, or race without breakdown: continuous flow
     const skipBreakdown =
@@ -857,7 +943,7 @@ export class TypingGame {
       });
       if (this._advanceTimer) clearTimeout(this._advanceTimer);
       this._advanceTimer = setTimeout(() => {
-        if (this.running) this.nextCharacter();
+        if (this.running && !this.raceEnded) this.nextCharacter();
       }, this.playMode === 'race' ? 120 : 180);
       return;
     }

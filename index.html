@@ -322,6 +322,25 @@
 
     <div class="flash" id="flash"></div>
 
+    <!-- Race complete summary -->
+    <div class="modal-backdrop race-summary-backdrop hidden" id="race-summary-modal">
+      <div class="race-summary-card" role="dialog" aria-labelledby="race-summary-title">
+        <p class="race-summary-eyebrow" id="race-summary-eyebrow">文章競速</p>
+        <h2 id="race-summary-title">挑戰完成</h2>
+        <p class="race-summary-sub" id="race-summary-sub">—</p>
+        <div class="race-summary-stats" id="race-summary-stats">
+          <div><span>總時間</span><strong id="rs-time">0:00</strong></div>
+          <div><span>CPM</span><strong id="rs-cpm">0</strong></div>
+          <div><span>準確率</span><strong id="rs-acc">100%</strong></div>
+          <div><span>完成字數</span><strong id="rs-chars">0 / 0</strong></div>
+        </div>
+        <div class="race-summary-actions">
+          <button type="button" class="start-btn" id="race-summary-retry">再跑一次</button>
+          <button type="button" class="start-btn alt" id="race-summary-menu">返回主選單</button>
+        </div>
+      </div>
+    </div>
+
     <!-- Start menu -->
     <div class="start-screen" id="start-screen">
       <div class="start-panel start-panel-wide menu-container">

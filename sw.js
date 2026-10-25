@@ -1,5 +1,5 @@
 /* Vincy's typing lab — lightweight offline cache */
-const CACHE_VERSION = 'vincys-typing-lab-v15';
+const CACHE_VERSION = 'vincys-typing-lab-v16';
 
 /** Small assets only — large dict JSON is runtime-cached (avoids install hang). */
 const PRECACHE = [

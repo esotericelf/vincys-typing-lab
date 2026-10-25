@@ -86,6 +86,22 @@ export class GameAudio {
     });
   }
 
+  /** Race / mission complete fanfare */
+  finish() {
+    if (!this.enabled) return;
+    const chord = [
+      [392.0, 0],
+      [493.88, 80],
+      [587.33, 160],
+      [783.99, 280],
+      [987.77, 420],
+    ];
+    chord.forEach(([f, delay]) => {
+      setTimeout(() => this.playTone(f, 0.35, 'sine', 0.11), delay);
+    });
+    setTimeout(() => this.playTone(1174.66, 0.55, 'triangle', 0.08), 560);
+  }
+
   error() {
     this.playTone(140, 0.18, 'sawtooth', 0.06);
   }

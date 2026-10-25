@@ -302,11 +302,45 @@ function updateRaceHud(data) {
   }
 }
 
+function showRaceSummary(summary) {
+  const modal = document.getElementById('race-summary-modal');
+  if (!modal || !summary) return;
+  const title = document.getElementById('race-summary-title');
+  const sub = document.getElementById('race-summary-sub');
+  const eye = document.getElementById('race-summary-eyebrow');
+  if (eye) eye.textContent = summary.title || '文章競速';
+  if (title) {
+    title.textContent = summary.completed ? '挑戰完成！' : '時間到';
+  }
+  if (sub) {
+    sub.textContent = summary.completed
+      ? '已完成全文輸入'
+      : '目標時間結束 — 以下是本局成績';
+  }
+  const t = document.getElementById('rs-time');
+  const c = document.getElementById('rs-cpm');
+  const a = document.getElementById('rs-acc');
+  const ch = document.getElementById('rs-chars');
+  if (t) t.textContent = summary.elapsedLabel || '0:00';
+  if (c) c.textContent = String(summary.cpm ?? 0);
+  if (a) a.textContent = `${summary.accuracy ?? 100}%`;
+  if (ch) ch.textContent = `${summary.typedChars ?? 0} / ${summary.totalChars ?? 0}`;
+  modal.classList.remove('hidden');
+  document.body.classList.add('race-summary-open');
+}
+
+function hideRaceSummary() {
+  const modal = document.getElementById('race-summary-modal');
+  modal?.classList.add('hidden');
+  document.body.classList.remove('race-summary-open');
+}
+
 const game = new TypingGame({
   keyboard,
   screen,
   onHudUpdate: updateHud,
   onRaceUpdate: updateRaceHud,
+  onRaceComplete: showRaceSummary,
 });
 
 function applyMobileScene(mobile) {
@@ -639,6 +673,7 @@ function showMenu() {
   game.stopTimer();
   game.hideReveal();
   game.hideCandidates();
+  hideRaceSummary();
   document.getElementById('race-track').classList.add('hidden');
   document.getElementById('start-screen').classList.remove('hidden');
   setSettingsOpen(false);
@@ -823,6 +858,7 @@ function beginDrill() {
 function beginRace() {
   if (!raceLoaded) return;
   document.getElementById('start-screen').classList.add('hidden');
+  hideRaceSummary();
   setSettingsOpen(false);
   unlockAudio();
   applyRaceTimeFromUi();
@@ -837,6 +873,32 @@ function beginRace() {
 
 document.getElementById('btn-start-drill').addEventListener('click', beginDrill);
 document.getElementById('btn-start-race').addEventListener('click', beginRace);
+
+document.getElementById('race-summary-menu')?.addEventListener('click', () => {
+  hideRaceSummary();
+  showMenu();
+});
+document.getElementById('race-summary-retry')?.addEventListener('click', () => {
+  hideRaceSummary();
+  if (!raceLoaded) {
+    showMenu();
+    return;
+  }
+  document.getElementById('start-screen').classList.add('hidden');
+  applyRaceTimeFromUi();
+  if (raceBreakdownToggle) game.setRaceBreakdown(raceBreakdownToggle.checked);
+  unlockAudio();
+  game.start('race');
+  mobileUi.syncPlayVisibility();
+  resize();
+  mobileUi.focusNativeIfNeeded();
+});
+document.getElementById('race-summary-modal')?.addEventListener('click', (e) => {
+  if (e.target.id === 'race-summary-modal') {
+    hideRaceSummary();
+    showMenu();
+  }
+});
 
 // —— Hotkeys ——
 // Letter keys always type. UI shortcuts: Esc, Tab, Ctrl+H/N/S/R
