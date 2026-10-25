@@ -43,6 +43,8 @@ export class TypingGame {
     this.raceMetrics = null;
     this.raceLimitSec = 0; // 0 = no hard limit
     this.raceEnded = false;
+    /** Race: show 2.5s 拆碼視窗 after each success (default off for speed) */
+    this.raceBreakdown = false;
 
     this.stats = {
       correctKeys: 0,
@@ -270,7 +272,10 @@ export class TypingGame {
     this._tickHud();
     this._timerId = setInterval(() => {
       this._tickHud();
-      if (this.playMode === 'race') this._checkRaceTime();
+      if (this.playMode === 'race') {
+        this._emitRace();
+        this._checkRaceTime();
+      }
     }, 200);
     return true;
   }
@@ -298,6 +303,22 @@ export class TypingGame {
 
   setRaceLimit(sec) {
     this.raceLimitSec = Math.max(0, Number(sec) || 0);
+  }
+
+  setRaceBreakdown(enabled) {
+    this.raceBreakdown = !!enabled;
+  }
+
+  getRaceTimeRemainingSec() {
+    if (this.playMode !== 'race' || !this.raceLimitSec) return null;
+    const elapsed = (performance.now() - this.startedAt) / 1000;
+    return Math.max(0, this.raceLimitSec - elapsed);
+  }
+
+  getRaceTimeProgress() {
+    if (!this.raceLimitSec) return 0;
+    const elapsed = (performance.now() - (this.startedAt || performance.now())) / 1000;
+    return Math.min(1, Math.max(0, elapsed / this.raceLimitSec));
   }
 
   loadRaceText(text, title = '自訂文章') {
@@ -826,8 +847,10 @@ export class TypingGame {
 
     if (this.playMode === 'race') this._emitRace();
 
-    // Fast Practice: skip breakdown popup, keep flash/audio, go next
-    if (this.fastPractice) {
+    // Fast Practice, or race without breakdown: continuous flow
+    const skipBreakdown =
+      this.fastPractice || (this.playMode === 'race' && !this.raceBreakdown);
+    if (skipBreakdown) {
       const code = [...(this.target?.cangjieCode || '')];
       code.forEach((letter, i) => {
         setTimeout(() => this.keyboard.pulseKey(letter, 220), i * 70);
@@ -835,11 +858,11 @@ export class TypingGame {
       if (this._advanceTimer) clearTimeout(this._advanceTimer);
       this._advanceTimer = setTimeout(() => {
         if (this.running) this.nextCharacter();
-      }, 180);
+      }, this.playMode === 'race' ? 120 : 180);
       return;
     }
 
-    // 拆碼解析視窗 2.5s (drill + race), then next char / next sentence
+    // 拆碼解析視窗 2.5s (drill, or race with toggle on)
     const delay =
       this.revealDelayMs === 0 ? 0 : this.SUCCESS_BREAKDOWN_MS || 2500;
     this.showReveal(false, {
@@ -1046,6 +1069,7 @@ export class TypingGame {
     if (typeof this.onRaceUpdate !== 'function') return;
     const total = this.raceSeq.length || 1;
     const done = Math.min(this.stats.completed, total);
+    const remain = this.getRaceTimeRemainingSec();
     this.onRaceUpdate({
       progress: done / total,
       done,
@@ -1053,6 +1077,10 @@ export class TypingGame {
       cpm: this.running || this.raceEnded ? this.getCpm() : 0,
       wpm: this.running || this.raceEnded ? this.getWpm() : 0,
       metrics: this.raceMetrics,
+      raceLimitSec: this.raceLimitSec,
+      timeProgress: this.raceLimitSec ? this.getRaceTimeProgress() : 0,
+      timeRemainingSec: remain,
+      timerLabel: this.getElapsedLabel(),
       ...extra,
     });
   }

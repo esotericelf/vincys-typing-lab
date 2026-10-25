@@ -246,6 +246,13 @@ function updateHud(data) {
   }
 }
 
+function formatRaceClock(sec) {
+  const s = Math.max(0, Math.ceil(Number(sec) || 0));
+  const m = Math.floor(s / 60);
+  const r = String(s % 60).padStart(2, '0');
+  return `${m}:${r}`;
+}
+
 function updateRaceHud(data) {
   const track = document.getElementById('race-track');
   if (!track) return;
@@ -260,6 +267,28 @@ function updateRaceHud(data) {
   document.getElementById('race-count-label').textContent = `${data.done} / ${data.total}`;
   document.getElementById('race-cpm-label').textContent = `${data.cpm} CPM`;
   document.getElementById('race-bar-fill').style.width = `${pct}%`;
+
+  const timeRow = document.getElementById('race-time-row');
+  const limit = Number(data.raceLimitSec) || 0;
+  if (timeRow) {
+    if (limit > 0) {
+      timeRow.hidden = false;
+      const remain = data.timeRemainingSec != null ? data.timeRemainingSec : limit;
+      const goalEl = document.getElementById('race-time-label');
+      const remainEl = document.getElementById('race-time-remain');
+      const fill = document.getElementById('race-time-bar-fill');
+      if (goalEl) goalEl.textContent = `目標 ${formatRaceClock(limit)}`;
+      if (remainEl) remainEl.textContent = formatRaceClock(remain);
+      if (fill) {
+        const tp = Math.min(1, Math.max(0, data.timeProgress || 0));
+        fill.style.width = `${Math.round(tp * 100)}%`;
+        fill.classList.toggle('is-urgent', remain <= 15 && remain > 0);
+        fill.classList.toggle('is-done', remain <= 0 || !!data.finished);
+      }
+    } else {
+      timeRow.hidden = true;
+    }
+  }
 
   const m = data.metrics;
   const titleEl = document.getElementById('race-metrics');
@@ -679,9 +708,105 @@ document.getElementById('txt-upload').addEventListener('change', async (e) => {
   showAnalytics(metrics, sequenceLength);
 });
 
-document.getElementById('race-time-limit').addEventListener('change', (e) => {
-  game.setRaceLimit(Number(e.target.value));
+const RACE_TIME_KEY = 'vincy-race-time-sec';
+const RACE_BREAKDOWN_KEY = 'vincy-race-breakdown';
+
+function readStoredRaceTime() {
+  try {
+    const n = Number(localStorage.getItem(RACE_TIME_KEY));
+    if (Number.isFinite(n) && n >= 0) return Math.min(3600, Math.floor(n));
+  } catch {
+    /* ignore */
+  }
+  return 120;
+}
+
+function readStoredRaceBreakdown() {
+  try {
+    return localStorage.getItem(RACE_BREAKDOWN_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function persistRaceTime(sec) {
+  try {
+    localStorage.setItem(RACE_TIME_KEY, String(Math.max(0, Math.floor(sec))));
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistRaceBreakdown(on) {
+  try {
+    localStorage.setItem(RACE_BREAKDOWN_KEY, on ? '1' : '0');
+  } catch {
+    /* ignore */
+  }
+}
+
+function getConfiguredRaceLimitSec() {
+  const sel = document.getElementById('race-time-limit');
+  const custom = document.getElementById('race-custom-seconds');
+  if (!sel) return 120;
+  if (sel.value === 'custom') {
+    const n = Number(custom?.value);
+    if (!Number.isFinite(n)) return 90;
+    return Math.min(3600, Math.max(10, Math.floor(n)));
+  }
+  return Math.max(0, Number(sel.value) || 0);
+}
+
+function syncRaceTimeUiFromStorage() {
+  const sel = document.getElementById('race-time-limit');
+  const wrap = document.getElementById('race-custom-time-wrap');
+  const custom = document.getElementById('race-custom-seconds');
+  const stored = readStoredRaceTime();
+  const presets = new Set(['0', '60', '120', '180', '300']);
+  if (!sel) return;
+
+  if (presets.has(String(stored))) {
+    sel.value = String(stored);
+    wrap?.classList.add('hidden');
+  } else {
+    sel.value = 'custom';
+    wrap?.classList.remove('hidden');
+    if (custom) custom.value = String(Math.max(10, stored || 90));
+  }
+  game.setRaceLimit(getConfiguredRaceLimitSec());
+}
+
+function applyRaceTimeFromUi() {
+  const sel = document.getElementById('race-time-limit');
+  const wrap = document.getElementById('race-custom-time-wrap');
+  if (sel?.value === 'custom') {
+    wrap?.classList.remove('hidden');
+  } else {
+    wrap?.classList.add('hidden');
+  }
+  const sec = getConfiguredRaceLimitSec();
+  game.setRaceLimit(sec);
+  persistRaceTime(sec);
+}
+
+document.getElementById('race-time-limit')?.addEventListener('change', applyRaceTimeFromUi);
+document.getElementById('race-custom-seconds')?.addEventListener('change', applyRaceTimeFromUi);
+document.getElementById('race-custom-seconds')?.addEventListener('input', () => {
+  if (document.getElementById('race-time-limit')?.value === 'custom') {
+    const sec = getConfiguredRaceLimitSec();
+    game.setRaceLimit(sec);
+  }
 });
+
+const raceBreakdownToggle = document.getElementById('race-breakdown-toggle');
+if (raceBreakdownToggle) {
+  raceBreakdownToggle.checked = readStoredRaceBreakdown();
+  game.setRaceBreakdown(raceBreakdownToggle.checked);
+  raceBreakdownToggle.addEventListener('change', () => {
+    game.setRaceBreakdown(raceBreakdownToggle.checked);
+    persistRaceBreakdown(raceBreakdownToggle.checked);
+  });
+}
 
 function beginDrill() {
   document.getElementById('start-screen').classList.add('hidden');
@@ -700,7 +825,10 @@ function beginRace() {
   document.getElementById('start-screen').classList.add('hidden');
   setSettingsOpen(false);
   unlockAudio();
-  game.setRaceLimit(Number(document.getElementById('race-time-limit').value));
+  applyRaceTimeFromUi();
+  if (raceBreakdownToggle) {
+    game.setRaceBreakdown(raceBreakdownToggle.checked);
+  }
   game.start('race');
   mobileUi.syncPlayVisibility();
   resize();
@@ -919,7 +1047,7 @@ screen.setContent({
 let dictReady = false;
 const dictStatus = document.getElementById('dict-status');
 buildSampleList();
-game.setRaceLimit(120);
+syncRaceTimeUiFromStorage();
 
 function setDictStatusReady() {
   const n = codeMap.size.toLocaleString();

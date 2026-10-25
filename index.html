@@ -171,11 +171,18 @@
         <div class="race-track hidden" id="race-track" aria-live="polite">
           <span class="race-track-left" id="race-progress-label">0%</span>
           <span class="race-track-count" id="race-count-label">0 / 0</span>
-          <div class="race-bar" title="Progress">
+          <div class="race-bar" title="文章進度">
             <div class="race-bar-fill" id="race-bar-fill"></div>
           </div>
           <span class="race-track-title" id="race-metrics">文章</span>
           <span class="race-track-right" id="race-cpm-label">0 CPM</span>
+          <div class="race-time-row" id="race-time-row" hidden>
+            <span class="race-time-label" id="race-time-label">目標 2:00</span>
+            <div class="race-time-bar" title="目標倒數">
+              <div class="race-time-bar-fill" id="race-time-bar-fill"></div>
+            </div>
+            <span class="race-time-remain" id="race-time-remain">2:00</span>
+          </div>
         </div>
       </div>
       </header>
@@ -344,14 +351,38 @@
               上傳 .txt 文章
               <input type="file" id="txt-upload" accept=".txt,text/plain" hidden />
             </label>
-            <select id="race-time-limit" aria-label="Time limit">
-              <option value="0">無時限</option>
-              <option value="60">60 秒</option>
-              <option value="120" selected>120 秒</option>
-              <option value="180">180 秒</option>
-              <option value="300">300 秒</option>
-            </select>
+            <div class="race-time-fields">
+              <select id="race-time-limit" aria-label="目標完成時間">
+                <option value="0">無時限</option>
+                <option value="60">60 秒</option>
+                <option value="120" selected>120 秒</option>
+                <option value="180">180 秒</option>
+                <option value="300">300 秒</option>
+                <option value="custom">自訂…</option>
+              </select>
+              <label class="race-custom-time hidden" id="race-custom-time-wrap" for="race-custom-seconds">
+                <span>自訂秒數</span>
+                <input
+                  type="number"
+                  id="race-custom-seconds"
+                  min="10"
+                  max="3600"
+                  step="10"
+                  value="90"
+                  inputmode="numeric"
+                  aria-label="自訂目標秒數"
+                />
+                <span class="race-custom-unit">秒</span>
+              </label>
+            </div>
           </div>
+          <label class="race-breakdown-toggle" for="race-breakdown-toggle">
+            <span>
+              <strong>答對後顯示拆碼視窗</strong>
+              <em>預設關閉，連續高速輸入</em>
+            </span>
+            <input type="checkbox" id="race-breakdown-toggle" />
+          </label>
           <div class="text-analytics hidden" id="text-analytics">
             <div><span>字數</span><strong id="an-total">0</strong></div>
             <div><span>不重複</span><strong id="an-unique">0</strong></div>

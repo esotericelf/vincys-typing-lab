@@ -749,6 +749,59 @@ html[data-theme="light"] .theme-swatch {
   transition: width 0.2s ease;
 }
 
+.race-time-row {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  width: 100%;
+  flex: 1 1 100%;
+  order: 10;
+  margin-top: 0.15rem;
+}
+
+.race-time-row[hidden] {
+  display: none !important;
+}
+
+.race-time-label,
+.race-time-remain {
+  font-family: var(--font-display);
+  font-size: 0.65rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.race-time-remain {
+  color: var(--gold);
+  min-width: 2.6rem;
+  text-align: right;
+}
+
+.race-time-bar {
+  flex: 1 1 auto;
+  height: 0.35rem;
+  min-width: 4rem;
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  overflow: hidden;
+}
+
+.race-time-bar-fill {
+  height: 100%;
+  width: 0%;
+  background: linear-gradient(90deg, var(--gold), var(--magenta));
+  transition: width 0.2s linear;
+}
+
+.race-time-bar-fill.is-urgent {
+  background: linear-gradient(90deg, var(--magenta), #ff6b6b);
+}
+
+.race-time-bar-fill.is-done {
+  background: var(--muted);
+}
+
 /* Typed overlay */
 .typed-overlay {
   position: absolute;
@@ -1340,13 +1393,73 @@ html[data-theme="light"] .theme-swatch {
   border-color: var(--cyan);
 }
 
-#race-time-limit {
+.race-time-fields {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+#race-time-limit,
+#race-custom-seconds {
   font-family: var(--font-body);
   font-size: 0.8rem;
   padding: 0.4rem 0.5rem;
   background: rgba(0, 0, 0, 0.35);
   border: 1px solid var(--border);
   color: var(--text);
+}
+
+.race-custom-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.race-custom-time.hidden {
+  display: none;
+}
+
+#race-custom-seconds {
+  width: 5.5rem;
+}
+
+.race-custom-unit {
+  color: var(--muted);
+}
+
+.race-breakdown-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin: 0 0 0.65rem;
+  padding: 0.5rem 0.55rem;
+  border: 1px solid rgba(0, 229, 255, 0.18);
+  background: rgba(0, 0, 0, 0.22);
+  cursor: pointer;
+}
+
+.race-breakdown-toggle strong {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--text);
+}
+
+.race-breakdown-toggle em {
+  display: block;
+  font-style: normal;
+  font-size: 0.68rem;
+  color: var(--muted);
+  margin-top: 0.15rem;
+}
+
+.race-breakdown-toggle input {
+  width: 1.1rem;
+  height: 1.1rem;
+  accent-color: var(--cyan);
 }
 
 .text-analytics {
